@@ -116,14 +116,18 @@ const filterByPattern = (pattern, words) => {
         }
     }
 
-    // Complex pattern: '?' = exactly one char, '-' or '*' = any chars
+    // Complex pattern: '?' = one char slot (trailing ones are optional — you may not use all tiles)
     try {
-        const regexSource = cleanPat
-            .split('')
-            .map(ch => {
-                if (ch === '?') return '.';
+        // Find last position that is a fixed letter (not a wildcard)
+        const chars = cleanPat.split('');
+        const lastFixed = chars.reduce(
+            (acc, ch, i) => (ch !== '?' && ch !== '-' && ch !== '*') ? i : acc, -1
+        );
+
+        const regexSource = chars
+            .map((ch, i) => {
+                if (ch === '?') return i > lastFixed ? '.?' : '.';
                 if (ch === '-' || ch === '*') return '.*';
-                // Escape the char and allow accented variant in pattern
                 return ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             })
             .join('');

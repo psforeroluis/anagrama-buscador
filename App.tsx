@@ -187,6 +187,48 @@ const App: React.FC = () => {
 
     const boardPlayCount = currentGame?.plays?.length ?? 0;
 
+    // --- Export / Import ---
+    const importInputRef = useRef<HTMLInputElement>(null);
+
+    const handleExport = useCallback(() => {
+        const data = JSON.stringify(games, null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const date = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = `apalabrados-partidas-${date}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Partidas exportadas correctamente');
+    }, [games, showToast]);
+
+    const handleImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const parsed = JSON.parse(ev.target?.result as string);
+                if (!Array.isArray(parsed)) throw new Error('Formato inválido');
+                const incoming: SavedGame[] = parsed.map(migrateGame);
+                // Merge: incoming games replace existing ones with same id; new ones are appended
+                setGames(prev => {
+                    const existingIds = new Set(prev.map(g => g.id));
+                    const merged = prev.map(g => incoming.find(ig => ig.id === g.id) ?? g);
+                    const newOnes = incoming.filter(ig => !existingIds.has(ig.id));
+                    return [...merged, ...newOnes];
+                });
+                showToast(`${incoming.length} partida(s) importada(s)`);
+            } catch {
+                showToast('Error: el archivo no es válido');
+            }
+        };
+        reader.readAsText(file);
+        // Reset so same file can be re-imported
+        e.target.value = '';
+    }, [showToast]);
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-brand-primary to-[#0f172a] font-sans flex flex-col items-center p-4 sm:p-6 lg:p-8 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
@@ -209,6 +251,33 @@ const App: React.FC = () => {
                             onDelete={deleteGame}
                         />
                     )}
+
+                    {/* Export / Import bar */}
+                    <div className="flex justify-end gap-2 mb-2 px-1">
+                        <input
+                            ref={importInputRef}
+                            type="file"
+                            accept=".json"
+                            className="hidden"
+                            onChange={handleImport}
+                        />
+                        <button
+                            onClick={() => importInputRef.current?.click()}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-subtle border border-slate-700 bg-slate-900/60 hover:text-white hover:border-slate-500 transition-all"
+                            title="Importar partidas desde archivo JSON"
+                        >
+                            <i className="fa-solid fa-upload"></i>
+                            Importar
+                        </button>
+                        <button
+                            onClick={handleExport}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-subtle border border-slate-700 bg-slate-900/60 hover:text-white hover:border-slate-500 transition-all"
+                            title="Exportar todas las partidas a JSON"
+                        >
+                            <i className="fa-solid fa-download"></i>
+                            Exportar
+                        </button>
+                    </div>
 
                     {/* Main card */}
                     <div className="bg-brand-secondary/50 backdrop-blur-md border border-white/5 rounded-2xl shadow-2xl overflow-hidden">

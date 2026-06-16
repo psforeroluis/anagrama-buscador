@@ -27,6 +27,7 @@
     "noEmit": true
   },
   "exclude": [
-    "public/services/anagramSolver.ts"
+    "public/services/anagramSolver.ts",
+    "dist"
   ]
 }

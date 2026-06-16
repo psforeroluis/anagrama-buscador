@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import Spinner from './Spinner';
-import { SearchMode, FoundWord } from '../App';
+import { SearchMode, FoundWord } from '../types';
 
 interface ResultsProps {
     isLoading: boolean;

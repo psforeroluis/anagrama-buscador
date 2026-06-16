@@ -1,0 +1,6 @@
+{
+  "name": "Anagrama - Buscador de Palabras",
+  "description": "Una aplicación web para encontrar todas las palabras que se pueden formar con un conjunto de letras y/o que coincidan con un patrón específico, utilizando un diccionario en español. Ingresa tus letras y un patrón opcional para descubrir todas las combinaciones posibles.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

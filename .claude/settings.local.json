@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(npm install *)",
+      "Bash(grep -E \"^[a-záéíóúüñ]{2,3}$\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
+      "Bash(grep -E \"^[a-záéíóúüñ]{2,3}[,\\\\s]\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
+      "Bash(grep -E \"^\\(el|la|al|mi|tu|yo|un|en|de|di|da|lo|le|me|te|se|su|si|no|ni|fe|he|re|ve|pi|bi|id|ex|ah|ay|uy|ow\\)$\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
+      "Bash(grep -E \"^\\(pie|pan|sol|luz|rio|mar|mas|los|las|les|nos|ojo|boca|sal|pez|oro|paz|mal|dos|son|van|ven|hay|fue|ser|ver|ir|ir|ya\\)$\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
+      "Bash(grep -cE \"^[a-záéíóúüñ]{2}$\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
+      "Bash(grep -cE \"^[a-záéíóúüñ]{3}$\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
+      "Bash(grep -cE \"^[a-záéíóúüñ]{2},\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
+      "Bash(grep -cE \"^[a-záéíóúüñ]{3},\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
+      "Bash(grep -n \"^al$\\\\|^el$\\\\|^la$\\\\|^lo$\\\\|^mi$\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
+      "Bash(grep -n \"^el$\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
+      "Bash(xxd)",
+      "Bash(grep -nE \"^[sé]{2}$|^[é]l$|^t[ú]$|^m[í]$|^s[í]$\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
+      "Bash(grep -nE \"^sé$|^él$|^tú$|^mí$|^sí$\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
+      "mcp__visualize__read_me"
+    ]
+  }
+}

@@ -175,7 +175,7 @@ const App: React.FC = () => {
 
     // Double-click on a board letter → fill pattern with that letter as anchor + auto-search
     const handleSearchFromBoard = useCallback((letter: string) => {
-        if (!currentGame || !isWorkerReady) return;
+        if (!currentGame) return;
         const rack = currentGame.rackLetters.trim();
         const wildcards = Math.min(Math.max(rack.length, 3), 5);
         const slots: BoardSlot[] = [
@@ -183,21 +183,19 @@ const App: React.FC = () => {
             { id: 'anchor', letter: letter.toLowerCase() },
             ...Array.from({ length: wildcards }, (_, i) => ({ id: `post${i}`, letter: '' })),
         ];
-        // Persist slots to game state
         updateCurrentGame({ boardSlots: slots });
         setActiveTab('search');
 
-        // Build pattern directly (don't read from stale currentGame.boardSlots)
-        const pattern = slots.map(s => s.letter || '?').join('');
-        const letters = rack;
+        // Only auto-search when the user has rack letters — otherwise just show the filled pattern
+        if (!rack || !isWorkerReady) return;
 
-        if (!letters && !pattern) return;
+        const pattern = slots.map(s => s.letter || '?').join('');
         setIsLoading(true);
         setHasSearched(true);
-        setActiveLettersQuery(letters);
+        setActiveLettersQuery(rack);
         setActivePatternQuery(pattern);
-        setSearchMode(letters && pattern ? 'combined' : 'pattern');
-        workerRef.current?.postMessage({ type: 'solve', payload: { letters, pattern, blanks: currentGame.blanks } });
+        setSearchMode('combined');
+        workerRef.current?.postMessage({ type: 'solve', payload: { letters: rack, pattern, blanks: currentGame.blanks } });
     }, [currentGame, updateCurrentGame, isWorkerReady]);
 
     const handleClear = useCallback(() => {

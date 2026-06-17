@@ -1,20 +1,34 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { PlayRecord, PlayDirection, PlayerSide } from '../types';
 
-// Words with Friends / Apalabrados board bonus squares (15×15, 0-indexed)
+// Apalabrados = Scrabble estándar (15×15, 0-indexed, filas A-O, columnas 1-15)
 type Bonus = 'TW' | 'DW' | 'TL' | 'DL';
 const BONUS: Record<string, Bonus> = {
-    '0,0':'TW','0,7':'TW','0,14':'TW','7,0':'TW','7,14':'TW','14,0':'TW','14,7':'TW','14,14':'TW',
-    '1,1':'DW','1,13':'DW','2,2':'DW','2,12':'DW','3,3':'DW','3,11':'DW',
-    '4,4':'DW','4,10':'DW','7,7':'DW','10,4':'DW','10,10':'DW',
-    '11,3':'DW','11,11':'DW','12,2':'DW','12,12':'DW','13,1':'DW','13,13':'DW',
-    '0,3':'TL','0,11':'TL','2,6':'TL','2,8':'TL','3,0':'TL','3,14':'TL',
-    '5,5':'TL','5,9':'TL','6,2':'TL','6,12':'TL','8,2':'TL','8,12':'TL',
-    '9,5':'TL','9,9':'TL','11,0':'TL','11,14':'TL','12,6':'TL','12,8':'TL','14,3':'TL','14,11':'TL',
-    '0,4':'DL','0,10':'DL','1,6':'DL','1,8':'DL','3,5':'DL','3,9':'DL',
-    '4,2':'DL','4,12':'DL','5,3':'DL','5,11':'DL','6,6':'DL','6,8':'DL',
-    '7,3':'DL','7,11':'DL','8,6':'DL','8,8':'DL','9,3':'DL','9,11':'DL',
-    '10,2':'DL','10,12':'DL','11,5':'DL','11,9':'DL','13,6':'DL','13,8':'DL','14,4':'DL','14,10':'DL',
+    // TP — Triple Palabra (esquinas + centros de borde)
+    '0,0':'TW','0,7':'TW','0,14':'TW',
+    '7,0':'TW','7,14':'TW',
+    '14,0':'TW','14,7':'TW','14,14':'TW',
+    // DP — Doble Palabra (diagonales desde esquinas + centro ★)
+    '1,1':'DW','2,2':'DW','3,3':'DW','4,4':'DW',
+    '1,13':'DW','2,12':'DW','3,11':'DW','4,10':'DW',
+    '10,4':'DW','11,3':'DW','12,2':'DW','13,1':'DW',
+    '10,10':'DW','11,11':'DW','12,12':'DW','13,13':'DW',
+    '7,7':'DW',
+    // TL — Triple Letra
+    '1,5':'TL','1,9':'TL',
+    '5,1':'TL','5,5':'TL','5,9':'TL','5,13':'TL',
+    '9,1':'TL','9,5':'TL','9,9':'TL','9,13':'TL',
+    '13,5':'TL','13,9':'TL',
+    // DL — Doble Letra
+    '0,3':'DL','0,11':'DL',
+    '2,6':'DL','2,8':'DL',
+    '3,0':'DL','3,7':'DL','3,14':'DL',
+    '6,2':'DL','6,6':'DL','6,8':'DL','6,12':'DL',
+    '7,3':'DL','7,11':'DL',
+    '8,2':'DL','8,6':'DL','8,8':'DL','8,12':'DL',
+    '11,0':'DL','11,7':'DL','11,14':'DL',
+    '12,6':'DL','12,8':'DL',
+    '14,3':'DL','14,11':'DL',
 };
 
 const BONUS_STYLE: Record<Bonus, string> = {

@@ -1,6 +1,6 @@
 export interface BoardSlot {
     id: string;
-    letter: string; // empty = rack tile needed; has letter = fixed board tile (free)
+    letter: string;
 }
 
 export type PlayDirection = 'H' | 'V';
@@ -26,9 +26,17 @@ export interface SavedGame {
     updatedAt: number;
 }
 
-export type SearchMode = 'anagram' | 'pattern' | 'combined';
+export type SearchMode = 'anagram' | 'pattern' | 'combined' | 'board';
+
+export interface Placement {
+    row: number;
+    col: number;
+    direction: 'H' | 'V';
+    score: number;
+}
 
 export interface FoundWord {
     word: string;
     score: number;
+    placements?: Placement[];
 }

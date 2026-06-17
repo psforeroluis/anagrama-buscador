@@ -165,12 +165,36 @@ const App: React.FC = () => {
         const pattern = slotsToPattern(currentGame.boardSlots);
         const letters = currentGame.rackLetters.trim();
         if (!letters && !pattern) return;
+
+        // Derive 15×15 board matrix from recorded plays (normalized letters, no accents)
+        const plays = currentGame.plays ?? [];
+        let boardMatrix: (string | null)[][] | null = null;
+        if (plays.length > 0 && letters) {
+            boardMatrix = Array.from({ length: 15 }, () => Array(15).fill(null));
+            for (const play of plays) {
+                const norm = play.word.toLowerCase()
+                    .replace(/[áà]/g,'a').replace(/[éè]/g,'e').replace(/[íì]/g,'i')
+                    .replace(/[óò]/g,'o').replace(/[úùü]/g,'u');
+                for (let i = 0; i < norm.length; i++) {
+                    const r = play.direction === 'H' ? play.startRow : play.startRow + i;
+                    const c = play.direction === 'H' ? play.startCol + i : play.startCol;
+                    if (r < 15 && c < 15 && boardMatrix[r][c] === null) {
+                        boardMatrix[r][c] = norm[i];
+                    }
+                }
+            }
+        }
+
+        const usingBoard = boardMatrix !== null;
         setIsLoading(true);
         setHasSearched(true);
         setActiveLettersQuery(letters);
         setActivePatternQuery(pattern);
-        setSearchMode(letters && pattern ? 'combined' : pattern ? 'pattern' : 'anagram');
-        workerRef.current?.postMessage({ type: 'solve', payload: { letters, pattern, blanks: currentGame.blanks } });
+        setSearchMode(usingBoard ? 'board' : letters && pattern ? 'combined' : pattern ? 'pattern' : 'anagram');
+        workerRef.current?.postMessage({
+            type: 'solve',
+            payload: { letters, pattern: usingBoard ? '' : pattern, blanks: currentGame.blanks, board: boardMatrix }
+        });
     }, [currentGame]);
 
     const handleClear = useCallback(() => {

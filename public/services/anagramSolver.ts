@@ -170,6 +170,125 @@ const solve = (letters, pattern, blanks) => {
         .sort((a, b) => b.score - a.score || a.word.localeCompare(b.word, 'es'));
 };
 
+// --- Board-aware placement engine ---
+
+// Scrabble / Apalabrados standard bonus layout (0-indexed)
+const BONUS_BOARD = {
+    '0,0':'TW','0,7':'TW','0,14':'TW','7,0':'TW','7,14':'TW','14,0':'TW','14,7':'TW','14,14':'TW',
+    '1,1':'DW','2,2':'DW','3,3':'DW','4,4':'DW','1,13':'DW','2,12':'DW','3,11':'DW','4,10':'DW',
+    '10,4':'DW','11,3':'DW','12,2':'DW','13,1':'DW','10,10':'DW','11,11':'DW','12,12':'DW','13,13':'DW','7,7':'DW',
+    '1,5':'TL','1,9':'TL','5,1':'TL','5,5':'TL','5,9':'TL','5,13':'TL',
+    '9,1':'TL','9,5':'TL','9,9':'TL','9,13':'TL','13,5':'TL','13,9':'TL',
+    '0,3':'DL','0,11':'DL','2,6':'DL','2,8':'DL','3,0':'DL','3,7':'DL','3,14':'DL',
+    '6,2':'DL','6,6':'DL','6,8':'DL','6,12':'DL','7,3':'DL','7,11':'DL',
+    '8,2':'DL','8,6':'DL','8,8':'DL','8,12':'DL','11,0':'DL','11,7':'DL','11,14':'DL',
+    '12,6':'DL','12,8':'DL','14,3':'DL','14,11':'DL',
+};
+
+// Score a word placed at (row, col) in direction, only applying bonuses to NEW tiles
+const scorePlacement = (normWord, row, col, direction, board) => {
+    let wordScore = 0;
+    let wordMult = 1;
+    for (let i = 0; i < normWord.length; i++) {
+        const r = direction === 'H' ? row : row + i;
+        const c = direction === 'H' ? col + i : col;
+        const isNew = !board[r]?.[c]; // null/undefined = new tile
+        const bonus = isNew ? (BONUS_BOARD[`${r},${c}`] || null) : null;
+        const ls = SCORES[normWord[i]] || 0;
+        if (!bonus)          wordScore += ls;
+        else if (bonus === 'TL') wordScore += ls * 3;
+        else if (bonus === 'DL') wordScore += ls * 2;
+        else { wordScore += ls; if (bonus === 'TW') wordMult *= 3; else wordMult *= 2; }
+    }
+    return wordScore * wordMult;
+};
+
+// Check whether normWord can legally be placed at (row, col, direction) on board
+const canPlace = (normWord, row, col, direction, board, boardIsEmpty) => {
+    const len = normWord.length;
+    if (direction === 'H' && col + len > 15) return false;
+    if (direction === 'V' && row + len > 15) return false;
+
+    // Word must not extend an existing word (no tile immediately before/after)
+    if (direction === 'H') {
+        if (col > 0 && board[row]?.[col - 1]) return false;
+        if (col + len < 15 && board[row]?.[col + len]) return false;
+    } else {
+        if (row > 0 && board[row - 1]?.[col]) return false;
+        if (row + len < 15 && board[row + len]?.[col]) return false;
+    }
+
+    if (boardIsEmpty) {
+        // First play: must pass through center (7,7)
+        for (let i = 0; i < len; i++) {
+            const r = direction === 'H' ? row : row + i;
+            const c = direction === 'H' ? col + i : col;
+            if (r === 7 && c === 7) return true;
+        }
+        return false;
+    }
+
+    let hasAnchor = false;
+    for (let i = 0; i < len; i++) {
+        const r = direction === 'H' ? row : row + i;
+        const c = direction === 'H' ? col + i : col;
+        const existing = board[r]?.[c] ?? null;
+
+        if (existing !== null) {
+            if (existing !== normWord[i]) return false; // letter conflict
+            hasAnchor = true;
+        } else {
+            // Adjacent (perpendicular) to an existing tile counts as anchor
+            if (direction === 'H') {
+                if (board[r - 1]?.[c] || board[r + 1]?.[c]) hasAnchor = true;
+            } else {
+                if (board[r]?.[c - 1] || board[r]?.[c + 1]) hasAnchor = true;
+            }
+        }
+    }
+    return hasAnchor;
+};
+
+const solveWithBoard = (letters, blanks, board) => {
+    const boardIsEmpty = board.every(row => row.every(cell => !cell));
+    const cleanLetters = cleanString(letters);
+    if (!cleanLetters) return [];
+
+    const candidates = findAnagrams(cleanLetters, blanks);
+    const results = [];
+
+    for (const word of candidates) {
+        const normWord = normalizeAccents(word.toLowerCase()).replace(/[^a-zñ]/g, '');
+        if (normWord.length < 2) continue;
+        const placements = [];
+
+        for (const dir of ['H', 'V']) {
+            const maxR = dir === 'H' ? 14 : 15 - normWord.length;
+            const maxC = dir === 'H' ? 15 - normWord.length : 14;
+            for (let r = 0; r <= maxR; r++) {
+                for (let c = 0; c <= maxC; c++) {
+                    if (canPlace(normWord, r, c, dir, board, boardIsEmpty)) {
+                        placements.push({ row: r, col: c, direction: dir,
+                            score: scorePlacement(normWord, r, c, dir, board) });
+                    }
+                }
+            }
+        }
+
+        if (placements.length > 0) {
+            placements.sort((a, b) => b.score - a.score);
+            results.push({ word, score: placements[0].score, placements: placements.slice(0, 12) });
+        }
+    }
+
+    // Deduplicate by normalized form
+    const seen = new Set();
+    return results
+        .filter(r => { const k = normalizeAccents(r.word); if (seen.has(k)) return false; seen.add(k); return true; })
+        .sort((a, b) => b.score - a.score || a.word.localeCompare(b.word, 'es'))
+        .slice(0, 150);
+};
+
 // --- Message Handler ---
 self.onmessage = (event) => {
     const { type, payload, dictionaryText } = event.data;
@@ -226,8 +345,10 @@ self.onmessage = (event) => {
 
         } else if (type === 'solve') {
             if (wordData.length === 0) throw new Error('Dictionary not loaded yet.');
-            const { letters, pattern, blanks = 0 } = payload;
-            const results = solve(letters, pattern, blanks);
+            const { letters, pattern, blanks = 0, board = null } = payload;
+            const results = (board && letters.trim())
+                ? solveWithBoard(letters, blanks, board)
+                : solve(letters, pattern, blanks);
             self.postMessage({ type: 'result', data: results });
         }
     } catch (e) {

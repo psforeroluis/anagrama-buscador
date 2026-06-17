@@ -312,7 +312,7 @@ self.onmessage = (event) => {
     try {
         if (type === 'init') {
             if (dictionaryText) {
-                const wordSet = new Set();
+                const rawWordSet = new Set();
                 const rawWords = dictionaryText.split('\n');
 
                 for (let i = 0; i < rawWords.length; i++) {
@@ -324,30 +324,30 @@ self.onmessage = (event) => {
                             const parts = rawWord.split(',').map(p => p.trim());
                             const base = parts[0];
                             if (!base) continue;
-                            wordSet.add(base.toLowerCase());
+                            rawWordSet.add(base.toLowerCase());
                             const suffix = parts[1];
                             if (suffix && suffix.length <= 3) {
                                 if (base.endsWith('o') && suffix === 'a') {
-                                    wordSet.add((base.slice(0, -1) + 'a').toLowerCase());
+                                    rawWordSet.add((base.slice(0, -1) + 'a').toLowerCase());
                                 } else if (base.endsWith('ado') && suffix === 'da') {
-                                    wordSet.add((base.slice(0, -3) + 'ada').toLowerCase());
+                                    rawWordSet.add((base.slice(0, -3) + 'ada').toLowerCase());
                                 } else if (base.endsWith('or') && suffix === 'ra') {
-                                    wordSet.add((base + 'a').toLowerCase());
+                                    rawWordSet.add((base + 'a').toLowerCase());
                                 } else if (base.endsWith('és') && suffix === 'sa') {
-                                    wordSet.add((base.slice(0, -2) + 'esa').toLowerCase());
+                                    rawWordSet.add((base.slice(0, -2) + 'esa').toLowerCase());
                                 } else if (base.endsWith('ón') && suffix === 'na') {
-                                    wordSet.add((base.slice(0, -2) + 'ona').toLowerCase());
+                                    rawWordSet.add((base.slice(0, -2) + 'ona').toLowerCase());
                                 } else if (base.length > suffix.length) {
-                                    wordSet.add((base.slice(0, -suffix.length) + suffix).toLowerCase());
+                                    rawWordSet.add((base.slice(0, -suffix.length) + suffix).toLowerCase());
                                 }
                             }
                         } else {
-                            wordSet.add(rawWord.toLowerCase());
+                            rawWordSet.add(rawWord.toLowerCase());
                         }
                     }
                 }
 
-                const cleanWords = Array.from(wordSet)
+                const cleanWords = Array.from(rawWordSet)
                     .map(w => w.toLowerCase().replace(/[^a-zñáéíóúü]/g, ''))
                     .filter(w => w.length >= 2 && /^[a-zñáéíóúü]+$/.test(w));
 

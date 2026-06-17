@@ -106,9 +106,13 @@ const WordInput: React.FC<WordInputProps> = ({
                         <div className="flex items-center justify-between mb-2 ml-1">
                             <span className="text-sm font-semibold text-brand-subtle">
                                 <i className="fa-solid fa-table-cells mr-2"></i>
-                                Contexto del tablero
-                                <span className="text-xs opacity-50 font-normal ml-1">(opcional)</span>
+                                Encajar en el tablero
                             </span>
+                            {boardSlots.length > 0 && (
+                                <span className="text-xs text-brand-accent font-mono bg-brand-accent/10 px-2 py-0.5 rounded">
+                                    {boardSlots.map(s => s.letter || '?').join('')}
+                                </span>
+                            )}
                         </div>
                         <div className="bg-slate-900/40 rounded-xl border border-slate-700 p-3 min-h-[88px] flex items-center">
                             <BoardBuilder
@@ -118,7 +122,7 @@ const WordInput: React.FC<WordInputProps> = ({
                             />
                         </div>
                         <p className="text-xs text-slate-600 mt-1.5 ml-1">
-                            Escribe la letra ya puesta en el tablero (azul) o deja en blanco los huecos que pone tu ficha (ámbar). Tab avanza, pega una palabra para rellenar.
+                            Letra azul = ya está en el tablero · Casilla ámbar = pones tu ficha · <strong className="text-slate-500">Doble clic en el Tablero</strong> para rellenar automático.
                         </p>
                     </div>
                 </div>

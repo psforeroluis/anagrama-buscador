@@ -165,37 +165,29 @@ const App: React.FC = () => {
         const pattern = slotsToPattern(currentGame.boardSlots);
         const letters = currentGame.rackLetters.trim();
         if (!letters && !pattern) return;
-
-        // Derive 15×15 board matrix from recorded plays (normalized letters, no accents)
-        const plays = currentGame.plays ?? [];
-        let boardMatrix: (string | null)[][] | null = null;
-        if (plays.length > 0 && letters) {
-            boardMatrix = Array.from({ length: 15 }, () => Array(15).fill(null));
-            for (const play of plays) {
-                const norm = play.word.toLowerCase()
-                    .replace(/[áà]/g,'a').replace(/[éè]/g,'e').replace(/[íì]/g,'i')
-                    .replace(/[óò]/g,'o').replace(/[úùü]/g,'u');
-                for (let i = 0; i < norm.length; i++) {
-                    const r = play.direction === 'H' ? play.startRow : play.startRow + i;
-                    const c = play.direction === 'H' ? play.startCol + i : play.startCol;
-                    if (r < 15 && c < 15 && boardMatrix[r][c] === null) {
-                        boardMatrix[r][c] = norm[i];
-                    }
-                }
-            }
-        }
-
-        const usingBoard = boardMatrix !== null;
         setIsLoading(true);
         setHasSearched(true);
         setActiveLettersQuery(letters);
         setActivePatternQuery(pattern);
-        setSearchMode(usingBoard ? 'board' : letters && pattern ? 'combined' : pattern ? 'pattern' : 'anagram');
-        workerRef.current?.postMessage({
-            type: 'solve',
-            payload: { letters, pattern: usingBoard ? '' : pattern, blanks: currentGame.blanks, board: boardMatrix }
-        });
+        setSearchMode(letters && pattern ? 'combined' : pattern ? 'pattern' : 'anagram');
+        workerRef.current?.postMessage({ type: 'solve', payload: { letters, pattern, blanks: currentGame.blanks } });
     }, [currentGame]);
+
+    // When user clicks a board letter → auto-fill pattern and switch to search tab
+    const handleSearchFromBoard = useCallback((letter: string) => {
+        if (!currentGame) return;
+        const rack = currentGame.rackLetters.trim();
+        const wildcards = Math.min(Math.max(rack.length, 3), 5);
+        const slots: BoardSlot[] = [
+            ...Array.from({ length: wildcards }, (_, i) => ({ id: `pre${i}`, letter: '' })),
+            { id: 'anchor', letter: letter.toLowerCase() },
+            ...Array.from({ length: wildcards }, (_, i) => ({ id: `post${i}`, letter: '' })),
+        ];
+        updateCurrentGame({ boardSlots: slots });
+        setActiveTab('search');
+        setHasSearched(false);
+        setFoundWords([]);
+    }, [currentGame, updateCurrentGame]);
 
     const handleClear = useCallback(() => {
         setFoundWords([]);
@@ -360,6 +352,7 @@ const App: React.FC = () => {
                                     plays={currentGame.plays ?? []}
                                     onAddPlay={addPlay}
                                     onRemovePlay={removePlay}
+                                    onSearchFromLetter={handleSearchFromBoard}
                                 />
                             )}
                         </div>

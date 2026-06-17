@@ -73,9 +73,10 @@ interface BoardViewProps {
     plays: PlayRecord[];
     onAddPlay: (play: Omit<PlayRecord, 'id'>) => void;
     onRemovePlay: (id: string) => void;
+    onSearchFromLetter: (letter: string) => void;
 }
 
-const BoardView: React.FC<BoardViewProps> = ({ plays, onAddPlay, onRemovePlay }) => {
+const BoardView: React.FC<BoardViewProps> = ({ plays, onAddPlay, onRemovePlay, onSearchFromLetter }) => {
     const [selCell, setSelCell] = useState<{ row: number; col: number } | null>(null);
     const [word, setWord] = useState('');
     const [direction, setDirection] = useState<PlayDirection>('H');
@@ -170,11 +171,13 @@ const BoardView: React.FC<BoardViewProps> = ({ plays, onAddPlay, onRemovePlay })
                                     return (
                                         <div
                                             key={col}
+                                            title={`${ROW_LABELS[row]}${col + 1} · clic = colocar aquí · doble clic = buscar cruces con "${cell.letter.toUpperCase()}"`}
                                             onClick={() => handleCellClick(row, col)}
+                                            onDoubleClick={() => onSearchFromLetter(cell.letter)}
                                             className={`w-[26px] h-[26px] flex items-center justify-center text-[11px] font-bold rounded-[3px] border cursor-pointer select-none ${
                                                 cell.player === 'me'
-                                                    ? 'bg-blue-800/70 border-blue-600/50 text-blue-100'
-                                                    : 'bg-red-900/60 border-red-700/40 text-red-100'
+                                                    ? 'bg-blue-800/70 border-blue-600/50 text-blue-100 hover:bg-blue-700/80'
+                                                    : 'bg-red-900/60 border-red-700/40 text-red-100 hover:bg-red-800/70'
                                             } ${isSel ? 'ring-1 ring-white/80' : ''}`}
                                         >
                                             {cell.letter.toUpperCase()}
@@ -208,12 +211,16 @@ const BoardView: React.FC<BoardViewProps> = ({ plays, onAddPlay, onRemovePlay })
             </div>
 
             {/* Legend */}
-            <div className="flex gap-4 text-xs text-slate-600 flex-wrap">
-                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-red-950/70 border border-red-800/50 inline-block text-red-600 flex items-center justify-center text-[9px] font-bold">TW</span> Triple palabra</span>
-                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-pink-950/50 border border-pink-900/40 inline-block text-pink-700 flex items-center justify-center text-[9px] font-bold">DW</span> Doble palabra</span>
-                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-teal-950/70 border border-teal-800/50 inline-block text-teal-600 flex items-center justify-center text-[9px] font-bold">TL</span> Triple letra</span>
-                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-blue-950/50 border border-blue-900/40 inline-block text-blue-700 flex items-center justify-center text-[9px] font-bold">DL</span> Doble letra</span>
+            <div className="flex gap-4 text-xs text-slate-600 flex-wrap mb-1">
+                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-red-800/80 border border-red-600/60 inline-block text-red-200 flex items-center justify-center text-[9px] font-bold">TP</span> Triple palabra</span>
+                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-orange-700/70 border border-orange-500/50 inline-block text-orange-200 flex items-center justify-center text-[9px] font-bold">DP</span> Doble palabra</span>
+                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-green-800/80 border border-green-600/60 inline-block text-green-200 flex items-center justify-center text-[9px] font-bold">TL</span> Triple letra</span>
+                <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-blue-800/70 border border-blue-600/50 inline-block text-blue-200 flex items-center justify-center text-[9px] font-bold">DL</span> Doble letra</span>
             </div>
+            <p className="text-xs text-slate-600">
+                <i className="fa-solid fa-hand-pointer mr-1"></i>
+                Clic simple = colocar jugada aquí · <strong className="text-slate-500">doble clic en una letra = buscar palabras que la crucen</strong>
+            </p>
 
             {/* Add play form */}
             <div className="bg-slate-900/50 rounded-xl border border-slate-700 p-4">

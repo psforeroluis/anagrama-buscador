@@ -1,5 +1,6 @@
 // --- Dictionary Store ---
 let wordData = []; // {word: string, normCharMap: object}[]
+let wordSet = new Set(); // normalized words for O(1) cross-word validation
 
 // --- Scoring ---
 const SCORES = {
@@ -204,7 +205,8 @@ const scorePlacement = (normWord, row, col, direction, board) => {
     return wordScore * wordMult;
 };
 
-// Check whether normWord can legally be placed at (row, col, direction) on board
+// Check whether normWord can legally be placed at (row, col, direction) on board.
+// Also validates every cross-word formed by newly placed tiles against the dictionary.
 const canPlace = (normWord, row, col, direction, board, boardIsEmpty) => {
     const len = normWord.length;
     if (direction === 'H' && col + len > 15) return false;
@@ -220,7 +222,6 @@ const canPlace = (normWord, row, col, direction, board, boardIsEmpty) => {
     }
 
     if (boardIsEmpty) {
-        // First play: must pass through center (7,7)
         for (let i = 0; i < len; i++) {
             const r = direction === 'H' ? row : row + i;
             const c = direction === 'H' ? col + i : col;
@@ -236,15 +237,29 @@ const canPlace = (normWord, row, col, direction, board, boardIsEmpty) => {
         const existing = board[r]?.[c] ?? null;
 
         if (existing !== null) {
-            if (existing !== normWord[i]) return false; // letter conflict
+            if (existing !== normWord[i]) return false; // letter conflict with board
             hasAnchor = true;
         } else {
-            // Adjacent (perpendicular) to an existing tile counts as anchor
+            // Empty cell: check perpendicular adjacency (counts as anchor)
             if (direction === 'H') {
                 if (board[r - 1]?.[c] || board[r + 1]?.[c]) hasAnchor = true;
             } else {
                 if (board[r]?.[c - 1] || board[r]?.[c + 1]) hasAnchor = true;
             }
+
+            // Cross-word validation: build the word formed perpendicularly by this new tile
+            let cross = '';
+            if (direction === 'H') {
+                // Scan upward then downward in column c, inserting normWord[i] at row r
+                let rr = r; while (rr > 0 && board[rr - 1]?.[c]) rr--;
+                while (rr < 15) { const ch = rr === r ? normWord[i] : board[rr]?.[c]; if (!ch) break; cross += ch; rr++; }
+            } else {
+                // Scan left then right in row r, inserting normWord[i] at col c
+                let cc = c; while (cc > 0 && board[r]?.[cc - 1]) cc--;
+                while (cc < 15) { const ch = cc === c ? normWord[i] : board[r]?.[cc]; if (!ch) break; cross += ch; cc++; }
+            }
+            // If a cross-word formed (≥2 letters), it must exist in the dictionary
+            if (cross.length >= 2 && !wordSet.has(cross)) return false;
         }
     }
     return hasAnchor;
@@ -341,6 +356,8 @@ self.onmessage = (event) => {
                     word,
                     normCharMap: createCharMap(normalizeAccents(word))
                 }));
+                // Build normalized set for O(1) cross-word lookup
+                wordSet = new Set(wordData.map(d => normalizeAccents(d.word)));
             }
             self.postMessage({ type: 'ready', size: wordData.length });
 

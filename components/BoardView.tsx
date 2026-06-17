@@ -1,41 +1,54 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { PlayRecord, PlayDirection, PlayerSide } from '../types';
 
-// Apalabrados = Scrabble estándar (15×15, 0-indexed, filas A-O, columnas 1-15)
+// Apalabrados = Words With Friends layout (15×15, 0-indexed, filas A-O, columnas 1-15)
+// TP no está en esquinas — está desplazado hacia adentro (igual que WWF)
 type Bonus = 'TW' | 'DW' | 'TL' | 'DL';
 const BONUS: Record<string, Bonus> = {
-    // TP — Triple Palabra (esquinas + centros de borde)
-    '0,0':'TW','0,7':'TW','0,14':'TW',
-    '7,0':'TW','7,14':'TW',
-    '14,0':'TW','14,7':'TW','14,14':'TW',
-    // DP — Doble Palabra (diagonales desde esquinas + centro ★)
-    '1,1':'DW','2,2':'DW','3,3':'DW','4,4':'DW',
-    '1,13':'DW','2,12':'DW','3,11':'DW','4,10':'DW',
-    '10,4':'DW','11,3':'DW','12,2':'DW','13,1':'DW',
-    '10,10':'DW','11,11':'DW','12,12':'DW','13,13':'DW',
+    // TP — Triple Palabra
+    '0,3':'TW','0,11':'TW',
+    '3,0':'TW','3,14':'TW',
+    '11,0':'TW','11,14':'TW',
+    '14,3':'TW','14,11':'TW',
+    // DP — Doble Palabra (+ centro ★)
+    '1,1':'DW','1,13':'DW',
+    '2,4':'DW','2,10':'DW',
+    '4,2':'DW','4,12':'DW',
     '7,7':'DW',
+    '10,2':'DW','10,12':'DW',
+    '12,4':'DW','12,10':'DW',
+    '13,1':'DW','13,13':'DW',
     // TL — Triple Letra
-    '1,5':'TL','1,9':'TL',
-    '5,1':'TL','5,5':'TL','5,9':'TL','5,13':'TL',
-    '9,1':'TL','9,5':'TL','9,9':'TL','9,13':'TL',
-    '13,5':'TL','13,9':'TL',
+    '0,6':'TL','0,8':'TL',
+    '3,5':'TL','3,9':'TL',
+    '5,3':'TL','5,11':'TL',
+    '6,0':'TL','6,14':'TL',
+    '8,0':'TL','8,14':'TL',
+    '9,3':'TL','9,11':'TL',
+    '11,5':'TL','11,9':'TL',
+    '14,6':'TL','14,8':'TL',
     // DL — Doble Letra
-    '0,3':'DL','0,11':'DL',
-    '2,6':'DL','2,8':'DL',
-    '3,0':'DL','3,7':'DL','3,14':'DL',
-    '6,2':'DL','6,6':'DL','6,8':'DL','6,12':'DL',
+    '0,0':'DL','0,14':'DL',
+    '1,5':'DL','1,9':'DL',
+    '2,2':'DL','2,12':'DL',
+    '4,4':'DL','4,10':'DL',
+    '5,6':'DL','5,8':'DL',
     '7,3':'DL','7,11':'DL',
-    '8,2':'DL','8,6':'DL','8,8':'DL','8,12':'DL',
-    '11,0':'DL','11,7':'DL','11,14':'DL',
-    '12,6':'DL','12,8':'DL',
-    '14,3':'DL','14,11':'DL',
+    '8,6':'DL','8,8':'DL',
+    '9,6':'DL','9,8':'DL',
+    '10,4':'DL','10,10':'DL',
+    '12,2':'DL','12,12':'DL',
+    '13,5':'DL','13,9':'DL',
+    '14,0':'DL','14,14':'DL',
 };
 
+const BONUS_LABEL: Record<Bonus, string> = { TW:'TP', DW:'DP', TL:'TL', DL:'DL' };
+
 const BONUS_STYLE: Record<Bonus, string> = {
-    TW: 'bg-red-950/70 border-red-800/50 text-red-600',
-    DW: 'bg-pink-950/50 border-pink-900/40 text-pink-700',
-    TL: 'bg-teal-950/70 border-teal-800/50 text-teal-600',
-    DL: 'bg-blue-950/50 border-blue-900/40 text-blue-700',
+    TW: 'bg-red-800/80 border-red-600/60 text-red-200',
+    DW: 'bg-orange-700/70 border-orange-500/50 text-orange-200',
+    TL: 'bg-green-800/80 border-green-600/60 text-green-200',
+    DL: 'bg-blue-800/70 border-blue-600/50 text-blue-200',
 };
 
 const ROW_LABELS = 'ABCDEFGHIJKLMNO';
@@ -185,7 +198,7 @@ const BoardView: React.FC<BoardViewProps> = ({ plays, onAddPlay, onRemovePlay })
                                                         : 'bg-slate-800/40 border-slate-700/30 hover:bg-slate-700/50'
                                         } ${isSel ? 'ring-1 ring-brand-accent' : ''}`}
                                     >
-                                        {isCenter && !isPreview ? '★' : bonus && !isPreview ? bonus : ''}
+                                        {isCenter && !isPreview ? '★' : bonus && !isPreview ? BONUS_LABEL[bonus] : ''}
                                     </div>
                                 );
                             })}

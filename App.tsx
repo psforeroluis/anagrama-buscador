@@ -4,8 +4,7 @@ import WordInput from './components/WordInput';
 import Results from './components/Results';
 import Toast from './components/Toast';
 import GameTabs from './components/GameTabs';
-import BoardView from './components/BoardView';
-import { SavedGame, FoundWord, SearchMode, BoardSlot, PlayRecord } from './types';
+import { SavedGame, FoundWord, SearchMode, BoardSlot } from './types';
 
 // --- localStorage (versioned key avoids conflicts with old data) ---
 const STORAGE_KEY = 'apalabrados_games_v2';
@@ -24,13 +23,11 @@ const createGame = (name: string): SavedGame => ({
     rackLetters: '',
     blanks: 0,
     boardSlots: [],
-    plays: [],
     updatedAt: Date.now(),
 });
 
 // Ensure games loaded from old localStorage versions have all fields
 const migrateGame = (g: Partial<SavedGame>): SavedGame => ({
-    plays: [],
     blanks: 0,
     boardSlots: [],
     rackLetters: '',
@@ -47,13 +44,10 @@ type WorkerMessage =
     | { type: 'ready'; size: number }
     | { type: 'result'; data: FoundWord[] };
 
-type AppTab = 'search' | 'board';
-
 const App: React.FC = () => {
     // --- Games ---
     const [games, setGames] = useState<SavedGame[]>([]);
     const [currentGameId, setCurrentGameId] = useState<string>('');
-    const [activeTab, setActiveTab] = useState<AppTab>('search');
 
     const currentGame = useMemo(
         () => games.find(g => g.id === currentGameId) ?? null,
@@ -149,16 +143,6 @@ const App: React.FC = () => {
         setHasSearched(false);
     }, [currentGameId]);
 
-    // --- Play management ---
-    const addPlay = useCallback((playData: Omit<PlayRecord, 'id'>) => {
-        const play: PlayRecord = { ...playData, id: crypto.randomUUID() };
-        updateCurrentGame({ plays: [...(currentGame?.plays ?? []), play] });
-    }, [currentGame, updateCurrentGame]);
-
-    const removePlay = useCallback((id: string) => {
-        updateCurrentGame({ plays: (currentGame?.plays ?? []).filter(p => p.id !== id) });
-    }, [currentGame, updateCurrentGame]);
-
     // --- Search ---
     const handleSearch = useCallback(() => {
         if (!currentGame) return;
@@ -173,31 +157,6 @@ const App: React.FC = () => {
         workerRef.current?.postMessage({ type: 'solve', payload: { letters, pattern, blanks: currentGame.blanks } });
     }, [currentGame]);
 
-    // Double-click on a board letter → fill pattern with that letter as anchor + auto-search
-    const handleSearchFromBoard = useCallback((letter: string) => {
-        if (!currentGame) return;
-        const rack = currentGame.rackLetters.trim();
-        const wildcards = Math.min(Math.max(rack.length, 3), 5);
-        const slots: BoardSlot[] = [
-            ...Array.from({ length: wildcards }, (_, i) => ({ id: `pre${i}`, letter: '' })),
-            { id: 'anchor', letter: letter.toLowerCase() },
-            ...Array.from({ length: wildcards }, (_, i) => ({ id: `post${i}`, letter: '' })),
-        ];
-        updateCurrentGame({ boardSlots: slots });
-        setActiveTab('search');
-
-        // Only auto-search when the user has rack letters — otherwise just show the filled pattern
-        if (!rack || !isWorkerReady) return;
-
-        const pattern = slots.map(s => s.letter || '?').join('');
-        setIsLoading(true);
-        setHasSearched(true);
-        setActiveLettersQuery(rack);
-        setActivePatternQuery(pattern);
-        setSearchMode('combined');
-        workerRef.current?.postMessage({ type: 'solve', payload: { letters: rack, pattern, blanks: currentGame.blanks } });
-    }, [currentGame, updateCurrentGame, isWorkerReady]);
-
     const handleClear = useCallback(() => {
         setFoundWords([]);
         setHasSearched(false);
@@ -209,50 +168,6 @@ const App: React.FC = () => {
         setToastMessage(msg);
         setTimeout(() => setToastMessage(null), 3000);
     }, []);
-
-    const boardPlayCount = currentGame?.plays?.length ?? 0;
-
-    // --- Export / Import ---
-    const importInputRef = useRef<HTMLInputElement>(null);
-
-    const handleExport = useCallback(() => {
-        const data = JSON.stringify(games, null, 2);
-        const blob = new Blob([data], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const date = new Date().toISOString().slice(0, 10);
-        a.href = url;
-        a.download = `apalabrados-partidas-${date}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast('Partidas exportadas correctamente');
-    }, [games, showToast]);
-
-    const handleImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            try {
-                const parsed = JSON.parse(ev.target?.result as string);
-                if (!Array.isArray(parsed)) throw new Error('Formato inválido');
-                const incoming: SavedGame[] = parsed.map(migrateGame);
-                // Merge: incoming games replace existing ones with same id; new ones are appended
-                setGames(prev => {
-                    const existingIds = new Set(prev.map(g => g.id));
-                    const merged = prev.map(g => incoming.find(ig => ig.id === g.id) ?? g);
-                    const newOnes = incoming.filter(ig => !existingIds.has(ig.id));
-                    return [...merged, ...newOnes];
-                });
-                showToast(`${incoming.length} partida(s) importada(s)`);
-            } catch {
-                showToast('Error: el archivo no es válido');
-            }
-        };
-        reader.readAsText(file);
-        // Reset so same file can be re-imported
-        e.target.value = '';
-    }, [showToast]);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-brand-primary to-[#0f172a] font-sans flex flex-col items-center p-4 sm:p-6 lg:p-8 relative overflow-hidden">
@@ -277,71 +192,10 @@ const App: React.FC = () => {
                         />
                     )}
 
-                    {/* Export / Import bar */}
-                    <div className="flex justify-end gap-2 mb-2 px-1">
-                        <input
-                            ref={importInputRef}
-                            type="file"
-                            accept=".json"
-                            className="hidden"
-                            onChange={handleImport}
-                        />
-                        <button
-                            onClick={() => importInputRef.current?.click()}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-subtle border border-slate-700 bg-slate-900/60 hover:text-white hover:border-slate-500 transition-all"
-                            title="Importar partidas desde archivo JSON"
-                        >
-                            <i className="fa-solid fa-upload"></i>
-                            Importar
-                        </button>
-                        <button
-                            onClick={handleExport}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-subtle border border-slate-700 bg-slate-900/60 hover:text-white hover:border-slate-500 transition-all"
-                            title="Exportar todas las partidas a JSON"
-                        >
-                            <i className="fa-solid fa-download"></i>
-                            Exportar
-                        </button>
-                    </div>
-
                     {/* Main card */}
                     <div className="bg-brand-secondary/50 backdrop-blur-md border border-white/5 rounded-2xl shadow-2xl overflow-hidden">
-                        {/* Tab bar */}
-                        <div className="flex border-b border-slate-700/60">
-                            <button
-                                onClick={() => setActiveTab('search')}
-                                className={`flex-1 px-4 py-3 text-sm font-semibold transition-all ${
-                                    activeTab === 'search'
-                                        ? 'text-brand-accent border-b-2 border-brand-accent bg-brand-accent/5'
-                                        : 'text-brand-subtle hover:text-white'
-                                }`}
-                            >
-                                <i className="fa-solid fa-magnifying-glass mr-2"></i>
-                                Buscar palabras
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('board')}
-                                className={`flex-1 px-4 py-3 text-sm font-semibold transition-all relative ${
-                                    activeTab === 'board'
-                                        ? 'text-brand-accent border-b-2 border-brand-accent bg-brand-accent/5'
-                                        : 'text-brand-subtle hover:text-white'
-                                }`}
-                            >
-                                <i className="fa-solid fa-border-all mr-2"></i>
-                                Tablero
-                                {boardPlayCount > 0 && (
-                                    <span className={`ml-2 text-xs font-bold px-1.5 py-0.5 rounded-full ${
-                                        activeTab === 'board' ? 'bg-brand-accent text-slate-900' : 'bg-slate-700 text-slate-300'
-                                    }`}>
-                                        {boardPlayCount}
-                                    </span>
-                                )}
-                            </button>
-                        </div>
-
-                        {/* Tab content */}
                         <div className="p-4 sm:p-6">
-                            {activeTab === 'search' && currentGame && (
+                            {currentGame && (
                                 <WordInput
                                     rackLetters={currentGame.rackLetters}
                                     blanks={currentGame.blanks}
@@ -355,30 +209,18 @@ const App: React.FC = () => {
                                     isWorkerReady={isWorkerReady}
                                 />
                             )}
-
-                            {activeTab === 'board' && currentGame && (
-                                <BoardView
-                                    plays={currentGame.plays ?? []}
-                                    onAddPlay={addPlay}
-                                    onRemovePlay={removePlay}
-                                    onSearchFromLetter={handleSearchFromBoard}
-                                />
-                            )}
                         </div>
                     </div>
 
-                    {/* Results (only in search tab) */}
-                    {activeTab === 'search' && (
-                        <Results
-                            isLoading={isLoading}
-                            words={foundWords}
-                            hasSearched={hasSearched}
-                            lettersQuery={activeLettersQuery}
-                            patternQuery={activePatternQuery}
-                            searchMode={searchMode}
-                            onShowToast={showToast}
-                        />
-                    )}
+                    <Results
+                        isLoading={isLoading}
+                        words={foundWords}
+                        hasSearched={hasSearched}
+                        lettersQuery={activeLettersQuery}
+                        patternQuery={activePatternQuery}
+                        searchMode={searchMode}
+                        onShowToast={showToast}
+                    />
                 </main>
 
                 <footer className="w-full text-center py-6 mt-8 text-brand-subtle text-sm opacity-60 hover:opacity-100 transition-opacity">

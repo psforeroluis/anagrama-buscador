@@ -16,7 +16,10 @@
       "Bash(xxd)",
       "Bash(grep -nE \"^[sé]{2}$|^[é]l$|^t[ú]$|^m[í]$|^s[í]$\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
       "Bash(grep -nE \"^sé$|^él$|^tú$|^mí$|^sí$\" /Users/luisforero/Downloads/anagrama---buscador-de-palabras/public/services/dictionary.txt)",
-      "mcp__visualize__read_me"
+      "mcp__visualize__read_me",
+      "Bash(npm run *)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(npx tsc *)"
     ]
   }
 }

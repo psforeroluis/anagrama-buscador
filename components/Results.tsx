@@ -1,11 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import Spinner from './Spinner';
-import { SearchMode, FoundWord, Placement } from '../types';
-
-const ROW_LABELS = 'ABCDEFGHIJKLMNO';
-
-const formatPlacement = (p: Placement) =>
-    `${ROW_LABELS[p.row]}${p.col + 1}${p.direction === 'H' ? '→' : '↓'}`;
+import { SearchMode, FoundWord } from '../types';
 
 interface ResultsProps {
     isLoading: boolean;
@@ -137,14 +132,11 @@ const Results: React.FC<ResultsProps> = ({
                     <p className="text-sm text-brand-subtle mt-0.5">
                         <span className="text-brand-accent font-bold">{showing}</span>
                         {showing !== total && <span className="text-slate-500"> de {total}</span>}
-                        {searchMode === 'board'
-                            ? <span> jugadas posibles con <span className="text-white font-mono bg-slate-700 px-1 rounded text-xs mx-1">{lettersQuery}</span></span>
-                            : <>
-                                <span> palabras</span>
-                                {lettersQuery && <span> con <span className="text-white font-mono bg-slate-700 px-1 rounded text-xs mx-1">{lettersQuery}</span></span>}
-                                {patternQuery && <span> patrón <span className="text-white font-mono bg-slate-700 px-1 rounded text-xs mx-1">{patternQuery}</span></span>}
-                              </>
-                        }
+                        <>
+                            <span> palabras</span>
+                            {lettersQuery && <span> con <span className="text-white font-mono bg-slate-700 px-1 rounded text-xs mx-1">{lettersQuery}</span></span>}
+                            {patternQuery && <span> patrón <span className="text-white font-mono bg-slate-700 px-1 rounded text-xs mx-1">{patternQuery}</span></span>}
+                        </>
                     </p>
                 </div>
 
@@ -208,9 +200,7 @@ const Results: React.FC<ResultsProps> = ({
                 </div>
             ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                    {filteredWords.map(({ word, score, placements }) => {
-                        const bestPlacement = placements?.[0];
-                        return (
+                    {filteredWords.map(({ word, score }) => (
                         <div
                             key={word}
                             onClick={(e) => handleCopy(e, word)}
@@ -230,20 +220,6 @@ const Results: React.FC<ResultsProps> = ({
                                 </p>
                             </div>
 
-                            {/* Board placement badge */}
-                            {bestPlacement && (
-                                <div className="mt-auto flex items-center justify-between text-xs">
-                                    <span className="font-mono font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/40 rounded px-1.5 py-0.5">
-                                        {formatPlacement(bestPlacement)}
-                                    </span>
-                                    {placements!.length > 1 && (
-                                        <span className="text-slate-500">
-                                            +{placements!.length - 1} pos
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 backdrop-blur-[1px] rounded-xl gap-2">
                                 <button
                                     onClick={(e) => handleCopy(e, word)}
@@ -261,8 +237,7 @@ const Results: React.FC<ResultsProps> = ({
                                 </button>
                             </div>
                         </div>
-                        );
-                    })}
+                    ))}
                 </div>
             )}
         </div>

@@ -60,9 +60,10 @@ const Results: React.FC<ResultsProps> = ({
 
     const handleCopy = (e: React.MouseEvent, word: string) => {
         e.stopPropagation();
-        navigator.clipboard.writeText(word).then(() => {
-            onShowToast(`"${word}" copiado al portapapeles`);
-        });
+        navigator.clipboard.writeText(word).then(
+            () => onShowToast(`"${word}" copiado al portapapeles`),
+            () => onShowToast('No se pudo copiar al portapapeles')
+        );
     };
 
     const handleDefine = (e: React.MouseEvent, word: string) => {
@@ -72,9 +73,10 @@ const Results: React.FC<ResultsProps> = ({
 
     const handleCopyAll = () => {
         const text = filteredWords.map(w => w.word).join(', ');
-        navigator.clipboard.writeText(text).then(() => {
-            onShowToast(`${filteredWords.length} palabras copiadas`);
-        });
+        navigator.clipboard.writeText(text).then(
+            () => onShowToast(`${filteredWords.length} palabras copiadas`),
+            () => onShowToast('No se pudo copiar al portapapeles')
+        );
     };
 
     if (isLoading) {

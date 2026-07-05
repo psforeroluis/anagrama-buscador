@@ -58,6 +58,7 @@ const App: React.FC = () => {
     const [foundWords, setFoundWords] = useState<FoundWord[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isWorkerReady, setIsWorkerReady] = useState(false);
+    const [loadError, setLoadError] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [searchMode, setSearchMode] = useState<SearchMode>('anagram');
     const [activeLettersQuery, setActiveLettersQuery] = useState('');
@@ -100,9 +101,9 @@ const App: React.FC = () => {
                     if (e.data.type === 'ready') setIsWorkerReady(true);
                     else if (e.data.type === 'result') { setFoundWords(e.data.data); setIsLoading(false); }
                 };
-                worker.onerror = () => setIsLoading(false);
+                worker.onerror = () => { setIsLoading(false); setLoadError(true); };
                 worker.postMessage({ type: 'init', dictionaryText: dict });
-            } catch { setIsLoading(false); }
+            } catch { setIsLoading(false); setLoadError(true); }
         };
         init();
         return () => workerRef.current?.terminate();
@@ -164,9 +165,11 @@ const App: React.FC = () => {
         setActivePatternQuery('');
     }, []);
 
+    const toastTimerRef = useRef<number | null>(null);
     const showToast = useCallback((msg: string) => {
         setToastMessage(msg);
-        setTimeout(() => setToastMessage(null), 3000);
+        if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = window.setTimeout(() => setToastMessage(null), 3000);
     }, []);
 
     return (
@@ -207,6 +210,7 @@ const App: React.FC = () => {
                                     onClear={handleClear}
                                     isLoading={isLoading}
                                     isWorkerReady={isWorkerReady}
+                                    loadError={loadError}
                                 />
                             )}
                         </div>

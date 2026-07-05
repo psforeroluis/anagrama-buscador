@@ -13,6 +13,7 @@ interface WordInputProps {
     onClear: () => void;
     isLoading: boolean;
     isWorkerReady: boolean;
+    loadError: boolean;
 }
 
 const WordInput: React.FC<WordInputProps> = ({
@@ -26,6 +27,7 @@ const WordInput: React.FC<WordInputProps> = ({
     onClear,
     isLoading,
     isWorkerReady,
+    loadError,
 }) => {
     const canSearch = isWorkerReady && !isLoading && (rackLetters.trim().length > 0 || boardSlots.length > 0);
 
@@ -38,7 +40,12 @@ const WordInput: React.FC<WordInputProps> = ({
 
     return (
         <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
-            {!isWorkerReady && (
+            {loadError ? (
+                <div className="flex items-center gap-2 text-xs text-red-300 mb-4 bg-red-950/40 rounded-lg px-3 py-2 border border-red-700/50">
+                    <i className="fa-solid fa-triangle-exclamation text-red-400"></i>
+                    <span>No se pudo cargar el diccionario. Recarga la página para intentarlo de nuevo.</span>
+                </div>
+            ) : !isWorkerReady && (
                 <div className="flex items-center gap-2 text-xs text-brand-subtle mb-4 bg-slate-900/50 rounded-lg px-3 py-2 border border-slate-700/50">
                     <i className="fa-solid fa-circle-notch fa-spin text-brand-accent"></i>
                     <span>Cargando diccionario...</span>
@@ -136,6 +143,8 @@ const WordInput: React.FC<WordInputProps> = ({
                     >
                         {isLoading ? (
                             <><i className="fa-solid fa-circle-notch fa-spin mr-3"></i>Procesando...</>
+                        ) : loadError ? (
+                            <><i className="fa-solid fa-triangle-exclamation mr-2"></i>Diccionario no disponible</>
                         ) : !isWorkerReady ? (
                             <><i className="fa-solid fa-circle-notch fa-spin mr-3"></i>Cargando...</>
                         ) : (

@@ -9,12 +9,15 @@ export interface SavedGame {
     rackLetters: string;
     blanks: number;
     boardSlots: BoardSlot[];
+    parallelMode: boolean;
     updatedAt: number;
 }
 
-export type SearchMode = 'anagram' | 'pattern' | 'combined';
+export type SearchMode = 'anagram' | 'pattern' | 'combined' | 'parallel';
 
 export interface FoundWord {
     word: string;
     score: number;
+    leave?: string;
+    leaveQuality?: 'good' | 'warn';
 }

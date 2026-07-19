@@ -23,6 +23,7 @@ const createGame = (name: string): SavedGame => ({
     rackLetters: '',
     blanks: 0,
     boardSlots: [],
+    parallelMode: false,
     updatedAt: Date.now(),
 });
 
@@ -31,6 +32,7 @@ const migrateGame = (g: Partial<SavedGame>): SavedGame => ({
     blanks: 0,
     boardSlots: [],
     rackLetters: '',
+    parallelMode: false,
     ...g,
     id: g.id ?? crypto.randomUUID(),
     name: g.name ?? 'Partida',
@@ -154,8 +156,12 @@ const App: React.FC = () => {
         setHasSearched(true);
         setActiveLettersQuery(letters);
         setActivePatternQuery(pattern);
-        setSearchMode(letters && pattern ? 'combined' : pattern ? 'pattern' : 'anagram');
-        workerRef.current?.postMessage({ type: 'solve', payload: { letters, pattern, blanks: currentGame.blanks } });
+        const parallelMode = currentGame.parallelMode && pattern.length > 0;
+        setSearchMode(parallelMode ? 'parallel' : letters && pattern ? 'combined' : pattern ? 'pattern' : 'anagram');
+        workerRef.current?.postMessage({
+            type: 'solve',
+            payload: { letters, pattern, blanks: currentGame.blanks, parallelMode },
+        });
     }, [currentGame]);
 
     const handleClear = useCallback(() => {
@@ -203,9 +209,11 @@ const App: React.FC = () => {
                                     rackLetters={currentGame.rackLetters}
                                     blanks={currentGame.blanks}
                                     boardSlots={currentGame.boardSlots}
+                                    parallelMode={currentGame.parallelMode}
                                     onRackChange={v => updateCurrentGame({ rackLetters: v })}
                                     onBlanksChange={v => updateCurrentGame({ blanks: v })}
                                     onBoardChange={slots => updateCurrentGame({ boardSlots: slots })}
+                                    onParallelModeChange={v => updateCurrentGame({ parallelMode: v })}
                                     onSearch={handleSearch}
                                     onClear={handleClear}
                                     isLoading={isLoading}

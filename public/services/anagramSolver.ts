@@ -1,5 +1,6 @@
 // --- Dictionary Store ---
 let wordData = []; // {word: string, normCharMap: object}[]
+let twoLetterSet = new Set(); // normalized 2-letter words, for parallel-overlap cross-checks
 
 // --- Scoring ---
 const SCORES = {
@@ -74,6 +75,83 @@ const findAnagrams = (letters, blanks) => {
     return found;
 };
 
+// --- Parallel-overlap mode ---
+// Board letters that are only *adjacent* (not spelled through) constrain candidates
+// via which two-letter words actually exist in the dictionary, instead of exact identity.
+const buildTwoLetterSet = () => {
+    twoLetterSet = new Set();
+    for (const { word } of wordData) {
+        if (word.length === 2) twoLetterSet.add(normalizeAccents(word));
+    }
+};
+
+const pairValid = (boardLetter, candidateLetter) =>
+    twoLetterSet.has(boardLetter + candidateLetter) || twoLetterSet.has(candidateLetter + boardLetter);
+
+const findParallelWords = (letters, blanks, normalizedPattern) => {
+    const cleanLetters = cleanString(letters);
+    const patLen = normalizedPattern.length;
+    if (!cleanLetters || patLen === 0) return [];
+
+    const inputMap = createCharMap(cleanLetters);
+    const found = [];
+
+    for (const { word, normCharMap } of wordData) {
+        if (word.length !== patLen) continue;
+
+        let crossOk = true;
+        for (let i = 0; i < patLen; i++) {
+            const boardCh = normalizedPattern[i];
+            if (boardCh === '?') continue;
+            if (!pairValid(boardCh, normalizeAccents(word[i]))) { crossOk = false; break; }
+        }
+        if (!crossOk) continue;
+
+        let blanksUsed = 0;
+        let canBeFormed = true;
+        for (const char in normCharMap) {
+            const deficit = normCharMap[char] - (inputMap[char] || 0);
+            if (deficit > 0) {
+                blanksUsed += deficit;
+                if (blanksUsed > blanks) { canBeFormed = false; break; }
+            }
+        }
+        if (canBeFormed) found.push(word);
+    }
+
+    return found;
+};
+
+// --- Rack leave: letters remaining after a word is played, for balance feedback ---
+const computeLeave = (word, cleanLetters, blanks) => {
+    const rackMap = createCharMap(cleanLetters);
+    const wordMap = createCharMap(normalizeAccents(word));
+    let blanksUsed = 0;
+
+    for (const char in wordMap) {
+        const used = Math.min(rackMap[char] || 0, wordMap[char]);
+        rackMap[char] = (rackMap[char] || 0) - used;
+        blanksUsed += wordMap[char] - used;
+    }
+    const blanksLeft = blanks - blanksUsed;
+
+    const leaveChars = Object.keys(rackMap).filter(c => rackMap[c] > 0).sort();
+    const leave = leaveChars.map(c => c.repeat(rackMap[c])).join('') + '*'.repeat(Math.max(0, blanksLeft));
+    if (!leave) return { leave: '', leaveQuality: undefined };
+
+    const anyTriple = leaveChars.some(c => rackMap[c] >= 3);
+    const vowels = leaveChars.filter(c => 'aeiou'.includes(c));
+    const goodConsonants = leaveChars.filter(c => 'rslnt'.includes(c));
+    const rareConsonants = leaveChars.filter(c => !'aeiourslnt'.includes(c));
+
+    let leaveQuality;
+    if (anyTriple) leaveQuality = 'warn';
+    else if (rareConsonants.length >= 2 && vowels.length === 0) leaveQuality = 'warn';
+    else if (vowels.length > 0 && (goodConsonants.length > 0 || blanksLeft > 0)) leaveQuality = 'good';
+
+    return { leave, leaveQuality };
+};
+
 // --- Pattern Matching ---
 const filterByPattern = (pattern, words) => {
     const cleanPat = cleanPattern(pattern);
@@ -131,20 +209,32 @@ const filterByPattern = (pattern, words) => {
 };
 
 // --- Main Solver ---
-const solve = (letters, pattern, blanks) => {
+const solve = (letters, pattern, blanks, parallelMode) => {
     const cleanLetters = cleanString(letters);
     const cleanPat = cleanPattern(pattern);
     let results;
+    let doLeave = false;
 
-    if (cleanLetters) {
-        const patternLetters = cleanPat.replace(/[-?*]/g, '');
-        results = findAnagrams(cleanLetters + cleanString(patternLetters), blanks);
+    if (parallelMode) {
+        const normalizedPattern = normalizeAccents(cleanPat);
+        // Parallel mode needs an exact-length pattern (fixed board letters + '?' gaps),
+        // open-ended wildcards ('-', '*') don't make sense as adjacency slots.
+        results = (normalizedPattern && !/[-*]/.test(normalizedPattern))
+            ? findParallelWords(letters, blanks, normalizedPattern)
+            : [];
+        doLeave = !!cleanLetters;
     } else {
-        results = wordData.filter(d => d.word.length >= 2).map(d => d.word);
-    }
+        if (cleanLetters) {
+            const patternLetters = cleanPat.replace(/[-?*]/g, '');
+            results = findAnagrams(cleanLetters + cleanString(patternLetters), blanks);
+        } else {
+            results = wordData.filter(d => d.word.length >= 2).map(d => d.word);
+        }
 
-    if (cleanPat) {
-        results = filterByPattern(cleanPat, results);
+        if (cleanPat) {
+            results = filterByPattern(cleanPat, results);
+        }
+        doLeave = !!cleanLetters && !cleanPat;
     }
 
     const seen = new Set();
@@ -155,7 +245,11 @@ const solve = (letters, pattern, blanks) => {
     }
 
     return deduped
-        .map(word => ({ word, score: calculateScore(word) }))
+        .map(word => {
+            const base = { word, score: calculateScore(word) };
+            if (doLeave) Object.assign(base, computeLeave(word, cleanLetters, blanks));
+            return base;
+        })
         .sort((a, b) => b.score - a.score || a.word.localeCompare(b.word, 'es'));
 };
 
@@ -209,13 +303,14 @@ self.onmessage = (event) => {
                     word,
                     normCharMap: createCharMap(normalizeAccents(word))
                 }));
+                buildTwoLetterSet();
             }
             self.postMessage({ type: 'ready', size: wordData.length });
 
         } else if (type === 'solve') {
             if (wordData.length === 0) throw new Error('Dictionary not loaded yet.');
-            const { letters, pattern, blanks = 0 } = payload;
-            const results = solve(letters, pattern, blanks);
+            const { letters, pattern, blanks = 0, parallelMode = false } = payload;
+            const results = solve(letters, pattern, blanks, parallelMode);
             self.postMessage({ type: 'result', data: results });
         }
     } catch (e) {

@@ -137,7 +137,17 @@ const Results: React.FC<ResultsProps> = ({
                         <>
                             <span> palabras</span>
                             {lettersQuery && <span> con <span className="text-white font-mono bg-slate-700 px-1 rounded text-xs mx-1">{lettersQuery}</span></span>}
-                            {patternQuery && <span> patrón <span className="text-white font-mono bg-slate-700 px-1 rounded text-xs mx-1">{patternQuery}</span></span>}
+                            {patternQuery && (
+                                <span>
+                                    {' '}{searchMode === 'parallel' ? 'en paralelo a' : 'patrón'}{' '}
+                                    <span className="text-white font-mono bg-slate-700 px-1 rounded text-xs mx-1">{patternQuery}</span>
+                                </span>
+                            )}
+                            {searchMode === 'parallel' && (
+                                <span className="ml-1 text-brand-accent">
+                                    <i className="fa-solid fa-arrows-left-right-to-line mr-1"></i>modo paralelo
+                                </span>
+                            )}
                         </>
                     </p>
                 </div>
@@ -202,7 +212,7 @@ const Results: React.FC<ResultsProps> = ({
                 </div>
             ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                    {filteredWords.map(({ word, score }) => (
+                    {filteredWords.map(({ word, score, leave, leaveQuality }) => (
                         <div
                             key={word}
                             onClick={(e) => handleCopy(e, word)}
@@ -221,6 +231,20 @@ const Results: React.FC<ResultsProps> = ({
                                     {word}
                                 </p>
                             </div>
+                            {leave && (
+                                <div
+                                    className={`text-[10px] font-mono text-center rounded px-1 py-0.5 mt-auto ${
+                                        leaveQuality === 'good'
+                                            ? 'text-green-400 bg-green-900/20'
+                                            : leaveQuality === 'warn'
+                                                ? 'text-amber-400 bg-amber-900/20'
+                                                : 'text-slate-500 bg-slate-900/40'
+                                    }`}
+                                    title="Letras que te quedan en el maletín si juegas esta palabra"
+                                >
+                                    sobra: {leave.toUpperCase()}
+                                </div>
+                            )}
 
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 backdrop-blur-[1px] rounded-xl gap-2">
                                 <button

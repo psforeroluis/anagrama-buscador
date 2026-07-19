@@ -1,14 +1,17 @@
-import React, { useCallback, FormEvent } from 'react';
+import React, { useCallback, useState, FormEvent } from 'react';
 import BoardBuilder from './BoardBuilder';
+import ShortWordsGuide from './ShortWordsGuide';
 import { BoardSlot } from '../types';
 
 interface WordInputProps {
     rackLetters: string;
     blanks: number;
     boardSlots: BoardSlot[];
+    parallelMode: boolean;
     onRackChange: (v: string) => void;
     onBlanksChange: (v: number) => void;
     onBoardChange: (slots: BoardSlot[]) => void;
+    onParallelModeChange: (v: boolean) => void;
     onSearch: () => void;
     onClear: () => void;
     isLoading: boolean;
@@ -20,15 +23,18 @@ const WordInput: React.FC<WordInputProps> = ({
     rackLetters,
     blanks,
     boardSlots,
+    parallelMode,
     onRackChange,
     onBlanksChange,
     onBoardChange,
+    onParallelModeChange,
     onSearch,
     onClear,
     isLoading,
     isWorkerReady,
     loadError,
 }) => {
+    const [showGuide, setShowGuide] = useState(false);
     const canSearch = isWorkerReady && !isLoading && (rackLetters.trim().length > 0 || boardSlots.length > 0);
 
     const handleSubmit = useCallback((e: FormEvent) => {
@@ -129,9 +135,49 @@ const WordInput: React.FC<WordInputProps> = ({
                             />
                         </div>
                         <p className="text-xs text-slate-600 mt-1.5 ml-1">
-                            Letra azul = ya está en el tablero · Casilla ámbar = pones tu ficha · <strong className="text-slate-500">Doble clic en el Tablero</strong> para rellenar automático.
+                            {parallelMode ? (
+                                <>Modo paralelo: la letra azul <strong className="text-slate-500">no</strong> se escribe, solo indica que hay una ficha vecina en el tablero — tu palabra sale entera del maletín.</>
+                            ) : (
+                                <>Letra azul = ya está en el tablero · Casilla ámbar = pones tu ficha · <strong className="text-slate-500">Doble clic en el Tablero</strong> para rellenar automático.</>
+                            )}
                         </p>
+
+                        <label className="flex items-center justify-between gap-3 mt-3 ml-1 select-none cursor-pointer">
+                            <span className="text-xs font-medium text-brand-subtle flex items-center gap-1.5">
+                                <i className="fa-solid fa-arrows-left-right-to-line text-brand-accent/80"></i>
+                                ¿Es una jugada en paralelo?
+                            </span>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={parallelMode}
+                                disabled={isDisabled}
+                                onClick={() => onParallelModeChange(!parallelMode)}
+                                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-40 ${
+                                    parallelMode ? 'bg-brand-accent' : 'bg-slate-700'
+                                }`}
+                            >
+                                <span
+                                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                                        parallelMode ? 'translate-x-5' : ''
+                                    }`}
+                                />
+                            </button>
+                        </label>
                     </div>
+                </div>
+
+                <div>
+                    <button
+                        type="button"
+                        onClick={() => setShowGuide(v => !v)}
+                        className="text-xs text-brand-subtle hover:text-brand-accent transition-colors flex items-center gap-1.5"
+                    >
+                        <i className={`fa-solid fa-chevron-${showGuide ? 'down' : 'right'} text-[10px]`}></i>
+                        <i className="fa-solid fa-graduation-cap"></i>
+                        Trucos: palabras cortas útiles
+                    </button>
+                    {showGuide && <ShortWordsGuide />}
                 </div>
 
                 {/* Buttons */}

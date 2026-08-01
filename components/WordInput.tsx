@@ -73,7 +73,7 @@ const WordInput: React.FC<WordInputProps> = ({
                                 value={rackLetters}
                                 onChange={e => onRackChange(e.target.value)}
                                 placeholder="ej: rstaeil"
-                                className="w-full px-5 py-4 surface-inset rounded-2xl focus:outline-none focus:border-accent/60 focus:ring-4 focus:ring-accent/15 transition-all duration-200 text-lg font-mono placeholder:font-sans placeholder-brand-subtle/40 text-brand-text disabled:opacity-40 uppercase tracking-[0.2em]"
+                                className="w-full px-5 py-4 surface-inset rounded-2xl focus:outline-none focus:border-accent/60 focus:ring-4 focus:ring-accent/15 transition-all duration-200 text-2xl font-mono font-bold placeholder:text-lg placeholder:font-sans placeholder:font-normal placeholder:tracking-normal placeholder:normal-case placeholder-brand-subtle/40 text-white disabled:opacity-40 uppercase tracking-[0.28em]"
                                 disabled={isDisabled}
                                 aria-label="Tus fichas del maletín"
                             />

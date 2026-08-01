@@ -9,15 +9,16 @@ const Toast: React.FC<ToastProps> = ({ message, onClose }) => {
     if (!message) return null;
 
     return (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 animate-slide-up">
-            <div className="bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl border border-slate-700 flex items-center gap-3">
-                <i className="fa-solid fa-check-circle text-brand-accent"></i>
-                <span className="font-medium">{message}</span>
-                <button 
+        <div className="fixed bottom-7 left-1/2 -translate-x-1/2 z-50 animate-rise" role="status">
+            <div className="surface rounded-2xl px-5 py-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,.95)] flex items-center gap-3 text-sm">
+                <i className="fa-solid fa-circle-check text-aqua"></i>
+                <span className="font-medium text-brand-text">{message}</span>
+                <button
                     onClick={onClose}
-                    className="ml-2 text-slate-400 hover:text-white transition-colors"
+                    className="focus-ring ml-1 text-brand-subtle hover:text-white transition-colors"
+                    aria-label="Cerrar"
                 >
-                    <i className="fa-solid fa-times"></i>
+                    <i className="fa-solid fa-xmark"></i>
                 </button>
             </div>
         </div>

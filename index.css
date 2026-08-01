@@ -1,0 +1,95 @@
+:root {
+    color-scheme: dark;
+}
+
+html {
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    background-color: #08090f;
+    background-image:
+        radial-gradient(ellipse 80% 60% at 15% -10%, rgba(124, 58, 237, .20), transparent 60%),
+        radial-gradient(ellipse 70% 50% at 90% 5%, rgba(34, 211, 238, .12), transparent 60%),
+        radial-gradient(ellipse 90% 60% at 50% 110%, rgba(167, 139, 250, .10), transparent 60%);
+    background-attachment: fixed;
+    letter-spacing: -0.011em;
+}
+
+/* Fine grain so the flat dark surface doesn't band */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: .035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+::selection {
+    background: rgba(167, 139, 250, .3);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #232838;
+    border-radius: 999px;
+    border: 3px solid #08090f;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #2f3548;
+}
+
+/* Glass surface used by cards and panels */
+.surface {
+    background: linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .015));
+    border: 1px solid rgba(255, 255, 255, .07);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
+
+/* Same look as .surface but without backdrop-filter — for elements repeated
+   many times (result cards, chips), where compositing the blur is too costly. */
+.tile {
+    background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .02));
+    border: 1px solid rgba(255, 255, 255, .07);
+}
+
+.surface-inset {
+    background: rgba(8, 9, 15, .55);
+    border: 1px solid rgba(255, 255, 255, .06);
+}
+
+/* Hairline highlight along the top edge of a card */
+.edge-light {
+    position: relative;
+}
+.edge-light::before {
+    content: '';
+    position: absolute;
+    inset-inline: 12%;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(196, 181, 253, .55), transparent);
+}
+
+.focus-ring:focus-visible {
+    outline: 2px solid rgba(167, 139, 250, .75);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+    }
+}

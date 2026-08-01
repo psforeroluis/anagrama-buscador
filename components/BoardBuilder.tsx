@@ -81,11 +81,11 @@ const BoardBuilder: React.FC<BoardBuilderProps> = ({ slots, onChange, disabled }
                     const isFixed = slot.letter !== '';
                     return (
                         <div key={slot.id} className="relative group flex flex-col items-center gap-0.5">
-                            <span className="text-xs text-slate-600 leading-none mb-0.5">{i + 1}</span>
-                            <div className={`w-11 h-11 rounded-lg border-2 transition-all ${
+                            <span className="text-[10px] text-brand-subtle/40 leading-none mb-0.5">{i + 1}</span>
+                            <div className={`w-11 h-11 rounded-xl transition-all ${
                                 isFixed
-                                    ? 'bg-blue-950/60 border-blue-500/60'
-                                    : 'bg-amber-950/40 border-amber-600/30'
+                                    ? 'bg-accent/15 shadow-[inset_0_0_0_1.5px_rgba(167,139,250,.55)]'
+                                    : 'bg-amber-400/[.08] shadow-[inset_0_0_0_1.5px_rgba(251,191,36,.3)]'
                             }`}>
                                 <input
                                     ref={el => { inputRefs.current[i] = el; }}
@@ -96,10 +96,10 @@ const BoardBuilder: React.FC<BoardBuilderProps> = ({ slots, onChange, disabled }
                                     onChange={e => handleChange(e, slot.id, i)}
                                     onKeyDown={e => handleKeyDown(e, i)}
                                     onPaste={e => handlePaste(e, i)}
-                                    className={`w-full h-full bg-transparent text-center text-lg font-bold uppercase outline-none rounded-lg ${
+                                    className={`w-full h-full bg-transparent text-center text-lg font-bold font-mono uppercase outline-none rounded-xl ${
                                         isFixed
-                                            ? 'text-blue-300 placeholder-blue-800'
-                                            : 'text-amber-400 placeholder-amber-800'
+                                            ? 'text-accent-soft placeholder-accent/30'
+                                            : 'text-amber-300 placeholder-amber-500/30'
                                     } disabled:opacity-40`}
                                 />
                             </div>
@@ -107,11 +107,11 @@ const BoardBuilder: React.FC<BoardBuilderProps> = ({ slots, onChange, disabled }
                                 type="button"
                                 onClick={() => removeSlot(i)}
                                 disabled={disabled}
-                                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-700 text-slate-400 hover:bg-red-900 hover:text-red-300 transition-all items-center justify-center opacity-0 group-hover:opacity-100 text-xs leading-none flex z-10"
+                                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-ink-500 text-brand-subtle hover:bg-red-500/80 hover:text-white transition-all items-center justify-center opacity-0 group-hover:opacity-100 text-xs leading-none flex z-10"
                             >
                                 ×
                             </button>
-                            <span className={`text-xs leading-none mt-0.5 ${isFixed ? 'text-blue-600' : 'text-amber-700'}`}>
+                            <span className={`text-[10px] leading-none mt-1 ${isFixed ? 'text-accent/70' : 'text-amber-400/50'}`}>
                                 {isFixed ? 'tablero' : 'ficha'}
                             </span>
                         </div>
@@ -119,17 +119,17 @@ const BoardBuilder: React.FC<BoardBuilderProps> = ({ slots, onChange, disabled }
                 })}
 
                 <div className="flex flex-col items-center gap-0.5">
-                    <span className="text-xs text-transparent leading-none mb-0.5">0</span>
+                    <span className="text-[10px] text-transparent leading-none mb-0.5">0</span>
                     <button
                         type="button"
                         onClick={() => addSlot()}
                         disabled={disabled}
-                        className="w-11 h-11 rounded-lg border-2 border-dashed border-slate-600 text-slate-500 hover:border-brand-accent hover:text-brand-accent transition-all flex items-center justify-center disabled:opacity-40"
+                        className="focus-ring w-11 h-11 rounded-xl border border-dashed border-white/15 text-brand-subtle/70 hover:border-accent/60 hover:text-accent-soft transition-all flex items-center justify-center disabled:opacity-40"
                         title="Añadir posición"
                     >
                         <i className="fa-solid fa-plus text-sm"></i>
                     </button>
-                    <span className="text-xs text-transparent leading-none mt-0.5">x</span>
+                    <span className="text-[10px] text-transparent leading-none mt-1">x</span>
                 </div>
 
                 {slots.length > 0 && (
@@ -137,7 +137,7 @@ const BoardBuilder: React.FC<BoardBuilderProps> = ({ slots, onChange, disabled }
                         type="button"
                         onClick={() => onChange([])}
                         disabled={disabled}
-                        className="self-center ml-1 text-xs text-slate-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                        className="focus-ring self-center ml-1 text-xs text-brand-subtle/60 hover:text-red-300 transition-colors disabled:opacity-40"
                         title="Eliminar todo el patrón"
                     >
                         <i className="fa-solid fa-trash-can mr-1"></i>
@@ -147,18 +147,18 @@ const BoardBuilder: React.FC<BoardBuilderProps> = ({ slots, onChange, disabled }
             </div>
 
             {slots.length > 0 && (
-                <div className="flex gap-4 mt-2 text-xs text-slate-600 items-center flex-wrap">
+                <div className="flex gap-4 mt-3 text-[11px] text-brand-subtle/60 items-center flex-wrap">
                     <span className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded bg-blue-950 border border-blue-500/50 inline-block"></span>
-                        Letra del tablero <span className="text-slate-700">(no gasta ficha)</span>
+                        <span className="w-2.5 h-2.5 rounded bg-accent/40 inline-block"></span>
+                        Letra del tablero <span className="text-brand-subtle/40">(no gasta ficha)</span>
                     </span>
                     <span className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded bg-amber-950 border border-amber-600/30 inline-block"></span>
+                        <span className="w-2.5 h-2.5 rounded bg-amber-400/40 inline-block"></span>
                         Hueco para tu ficha
                     </span>
                     {hasBoard && (
-                        <span className="ml-auto text-slate-700 font-mono">
-                            patrón: <span className="text-brand-accent">{pattern}</span>
+                        <span className="ml-auto font-mono">
+                            patrón: <span className="text-accent-soft">{pattern}</span>
                         </span>
                     )}
                 </div>

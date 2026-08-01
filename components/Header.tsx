@@ -1,22 +1,25 @@
 import React from 'react';
 
-const Header: React.FC = () => {
-    return (
-        <header className="text-center animate-fade-in py-4">
-            <div className="inline-block mb-2">
-                <span className="bg-brand-accent/10 text-brand-accent px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-brand-accent/20">
-                    Versión 2.0
+const Header: React.FC = () => (
+    <header className="pt-10 pb-8 sm:pt-14 sm:pb-10 animate-fade-in">
+        <div className="flex flex-col items-center text-center gap-5">
+            <span className="inline-flex items-center gap-2 surface-inset rounded-full px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-subtle">
+                <span className="w-1.5 h-1.5 rounded-full bg-aqua shadow-[0_0_10px_2px_rgba(34,211,238,.6)]"></span>
+                Diccionario español offline
+            </span>
+
+            <h1 className="text-5xl sm:text-6xl font-extrabold tracking-[-0.04em] leading-none">
+                <span className="bg-clip-text text-transparent bg-gradient-to-b from-white via-white to-accent-soft">
+                    Anagrama
                 </span>
-            </div>
-            <h1 className="text-4xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-brand-text via-brand-accent to-brand-text tracking-tight drop-shadow-sm">
-                <i className="fa-solid fa-wand-magic-sparkles mr-3 text-brand-accent"></i>
-                Anagrama
             </h1>
-            <p className="mt-4 text-lg text-brand-subtle max-w-2xl mx-auto leading-relaxed">
-                Descubre palabras ocultas, resuelve crucigramas o mejora tu vocabulario. 
+
+            <p className="text-brand-subtle text-base sm:text-lg max-w-xl leading-relaxed">
+                Encuentra la jugada con más letras y más puntos a partir de tus fichas
+                y del hueco que tienes en el tablero.
             </p>
-        </header>
-    );
-};
+        </div>
+    </header>
+);
 
 export default Header;

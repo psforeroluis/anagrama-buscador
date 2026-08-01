@@ -4,34 +4,63 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Anagrama - Buscador de Palabras</title>
+    <meta name="theme-color" content="#08090f" />
+    <title>Anagrama — Buscador de Palabras</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
           extend: {
+            fontFamily: {
+              sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+              mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+            },
             colors: {
-              'brand-primary': '#1e293b',
-              'brand-secondary': '#334155',
-              'brand-accent': '#38bdf8',
-              'brand-text': '#e2e8f0',
-              'brand-subtle': '#94a3b8',
+              ink: {
+                900: '#08090f',
+                800: '#0c0e16',
+                700: '#12151f',
+                600: '#181c28',
+                500: '#232838',
+                400: '#2f3548',
+              },
+              accent: {
+                DEFAULT: '#a78bfa',
+                soft: '#c4b5fd',
+                deep: '#7c3aed',
+              },
+              aqua: '#22d3ee',
+              'brand-text': '#e8eaf2',
+              'brand-subtle': '#8d93a8',
+            },
+            borderRadius: {
+              '4xl': '2rem',
             },
             animation: {
-              'fade-in': 'fadeIn 0.5s ease-in-out',
-              'slide-up': 'slideUp 0.5s ease-in-out'
+              'fade-in': 'fadeIn .4s cubic-bezier(.22,1,.36,1) both',
+              'rise': 'rise .5s cubic-bezier(.22,1,.36,1) both',
+              'pop': 'pop .35s cubic-bezier(.22,1,.36,1) both',
+              'float': 'float 16s ease-in-out infinite',
             },
             keyframes: {
-              fadeIn: {
-                '0%': { opacity: 0 },
-                '100%': { opacity: 1 },
-              },
-              slideUp: {
-                '0%': { transform: 'translateY(20px)', opacity: 0 },
+              fadeIn: { '0%': { opacity: 0 }, '100%': { opacity: 1 } },
+              rise: {
+                '0%': { transform: 'translateY(14px)', opacity: 0 },
                 '100%': { transform: 'translateY(0)', opacity: 1 },
-              }
-            }
+              },
+              pop: {
+                '0%': { transform: 'scale(.96)', opacity: 0 },
+                '100%': { transform: 'scale(1)', opacity: 1 },
+              },
+              float: {
+                '0%,100%': { transform: 'translate3d(0,0,0) scale(1)' },
+                '50%': { transform: 'translate3d(3%,-4%,0) scale(1.08)' },
+              },
+            },
           }
         }
       }
@@ -47,7 +76,7 @@
 </script>
 <link rel="stylesheet" href="/index.css">
 </head>
-<body class="bg-brand-primary text-brand-text">
+<body class="bg-ink-900 text-brand-text antialiased">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 </body>

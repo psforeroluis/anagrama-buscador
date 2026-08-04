@@ -253,6 +253,525 @@ const solve = (letters, pattern, blanks, parallelMode) => {
         .sort((a, b) => b.score - a.score || a.word.localeCompare(b.word, 'es'));
 };
 
+// =====================================================================
+// BOARD ENGINE — DAWG + generador de jugadas (Appel & Jacobson)
+// Puntúa de verdad: multiplicadores de casilla, palabras cruzadas,
+// bonus de 7 fichas y comodines a 0 puntos.
+// =====================================================================
+
+const BOARD_SIZE = 15;
+const ALPHABET = 'abcdefghijklmnopqrstuvwxyzñ';
+const LETTER_INDEX = {};
+for (let i = 0; i < ALPHABET.length; i++) LETTER_INDEX[ALPHABET[i]] = i;
+
+// Valor de cada ficha (una letra por casilla; sin fichas de dígrafo CH/LL/RR).
+const TILE_VALUES = new Uint8Array(ALPHABET.length);
+for (let i = 0; i < ALPHABET.length; i++) TILE_VALUES[i] = SCORES[ALPHABET[i]] || 0;
+
+// Premios: '.' normal · d/t = letra doble/triple · D/T = palabra doble/triple.
+// Disposición de Apalabrados / Words With Friends; la casilla central no multiplica.
+// El tablero es simétrico respecto a la diagonal, así que la misma tabla
+// sirve para la orientación transpuesta.
+// (Copia de services/boardLayout.ts — este worker se carga como texto y no importa módulos.)
+const PREMIUM_ROWS = [
+    '..T.t.....t.T..',
+    '.t...D...D...t.',
+    'T.d...t.t...d.T',
+    '...t...D...t...',
+    't.....d.d.....t',
+    '.D...t...t...D.',
+    '..t.d.....d.t..',
+    '...D.......D...',
+    '..t.d.....d.t..',
+    '.D...t...t...D.',
+    't.....d.d.....t',
+    '...t...D...t...',
+    'T.d...t.t...d.T',
+    '.t...D...D...t.',
+    '..T.t.....t.T..',
+];
+
+// Bonus por usar las 7 fichas del atril (Apalabrados: 35; Scrabble: 50).
+const BINGO_BONUS = 35;
+
+const letterMultAt = (r, c) => {
+    const p = PREMIUM_ROWS[r][c];
+    return p === 'd' ? 2 : p === 't' ? 3 : 1;
+};
+const wordMultAt = (r, c) => {
+    const p = PREMIUM_ROWS[r][c];
+    return p === 'D' ? 2 : p === 'T' ? 3 : 1;
+};
+
+// --- DAWG (autómata acíclico minimizado, algoritmo incremental de Daciuk) ---
+let dawg = null; // { final: Uint8Array, edgeStart: Uint32Array, edgeLetter: Uint8Array, edgeTarget: Uint32Array }
+
+const buildDawg = (words) => {
+    const sorted = words.slice().sort();
+    const root = { final: false, edges: [], id: -1 };
+    const register = new Map();
+    const unchecked = [];
+    let nextId = 0;
+
+    const nodeKey = (n) => {
+        let k = n.final ? '1' : '0';
+        for (let i = 0; i < n.edges.length; i++) k += ',' + n.edges[i][0] + ':' + n.edges[i][1].id;
+        return k;
+    };
+
+    // Minimiza los nodos pendientes hasta dejar `downTo` en la pila.
+    const replaceOrRegister = (downTo) => {
+        while (unchecked.length > downTo) {
+            const entry = unchecked.pop();
+            const parent = entry[0];
+            const child = entry[2];
+            const key = nodeKey(child);
+            const existing = register.get(key);
+            if (existing) {
+                parent.edges[parent.edges.length - 1][1] = existing;
+            } else {
+                child.id = nextId++;
+                register.set(key, child);
+            }
+        }
+    };
+
+    let prev = '';
+    for (let w = 0; w < sorted.length; w++) {
+        const word = sorted[w];
+        if (word === prev) continue;
+
+        let common = 0;
+        const minLen = Math.min(word.length, prev.length);
+        while (common < minLen && word[common] === prev[common]) common++;
+
+        replaceOrRegister(common);
+
+        let node = unchecked.length === 0 ? root : unchecked[unchecked.length - 1][2];
+        for (let i = common; i < word.length; i++) {
+            const li = LETTER_INDEX[word[i]];
+            const child = { final: false, edges: [], id: -1 };
+            node.edges.push([li, child]);
+            unchecked.push([node, li, child]);
+            node = child;
+        }
+        node.final = true;
+        prev = word;
+    }
+    replaceOrRegister(0);
+
+    // Aplanado a arrays tipados para recorrer rápido durante la generación.
+    const order = [];
+    const indexOf = new Map();
+    const stack = [root];
+    indexOf.set(root, 0);
+    order.push(root);
+    while (stack.length) {
+        const n = stack.pop();
+        for (let i = 0; i < n.edges.length; i++) {
+            const target = n.edges[i][1];
+            if (!indexOf.has(target)) {
+                indexOf.set(target, order.length);
+                order.push(target);
+                stack.push(target);
+            }
+        }
+    }
+
+    let edgeCount = 0;
+    for (let i = 0; i < order.length; i++) edgeCount += order[i].edges.length;
+
+    const final = new Uint8Array(order.length);
+    const edgeStart = new Uint32Array(order.length + 1);
+    const edgeLetter = new Uint8Array(edgeCount);
+    const edgeTarget = new Uint32Array(edgeCount);
+
+    let e = 0;
+    for (let i = 0; i < order.length; i++) {
+        const n = order[i];
+        final[i] = n.final ? 1 : 0;
+        edgeStart[i] = e;
+        const edges = n.edges.slice().sort((a, b) => a[0] - b[0]);
+        for (let j = 0; j < edges.length; j++) {
+            edgeLetter[e] = edges[j][0];
+            edgeTarget[e] = indexOf.get(edges[j][1]);
+            e++;
+        }
+    }
+    edgeStart[order.length] = e;
+
+    return { final, edgeStart, edgeLetter, edgeTarget, nodeCount: order.length, edgeCount };
+};
+
+// El DAWG solo hace falta en modo tablero: se construye la primera vez que se
+// usa (~2 s) para no retrasar la carga del buscador.
+const ensureDawg = () => {
+    if (dawg) return;
+    // El motor de tablero juega con letras sueltas y sin tildes, que es como
+    // están las fichas físicas. Se descartan las palabras con K o W: no hay
+    // fichas de esas letras, así que ni con comodín son jugables.
+    dawg = buildDawg(Array.from(new Set(
+        wordData
+            .map(d => normalizeAccents(d.word))
+            .filter(w => w.length >= 2 && !/[kw]/.test(w))
+    )));
+};
+
+const dawgEdge = (node, letterIdx) => {
+    const end = dawg.edgeStart[node + 1];
+    for (let e = dawg.edgeStart[node]; e < end; e++) {
+        if (dawg.edgeLetter[e] === letterIdx) return dawg.edgeTarget[e];
+        if (dawg.edgeLetter[e] > letterIdx) return -1;
+    }
+    return -1;
+};
+
+// --- Estado de tablero en una orientación concreta ---
+// grid[r][c] = índice de letra o -1 (vacía) · blankGrid[r][c] = 1 si es comodín.
+const transpose = (grid) => {
+    const out = [];
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        const row = new Int8Array(BOARD_SIZE);
+        for (let c = 0; c < BOARD_SIZE; c++) row[c] = grid[c][r];
+        out.push(row);
+    }
+    return out;
+};
+
+const isEmptyBoard = (grid) => {
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) if (grid[r][c] >= 0) return false;
+    }
+    return true;
+};
+
+// Cross-checks: qué letras son legales en cada casilla vacía según la palabra
+// perpendicular que se formaría. ALL_LETTERS = sin restricción.
+const ALL_LETTERS_MASK = (1 << 27) - 1;
+
+const computeCrossSets = (grid) => {
+    const masks = [];
+    const hasCross = [];
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        masks.push(new Int32Array(BOARD_SIZE));
+        hasCross.push(new Uint8Array(BOARD_SIZE));
+    }
+
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+            if (grid[r][c] >= 0) { masks[r][c] = 0; continue; }
+
+            let top = r - 1;
+            while (top >= 0 && grid[top][c] >= 0) top--;
+            let bottom = r + 1;
+            while (bottom < BOARD_SIZE && grid[bottom][c] >= 0) bottom++;
+
+            const prefixLen = r - 1 - top;
+            const suffixLen = bottom - 1 - r;
+            if (prefixLen === 0 && suffixLen === 0) {
+                masks[r][c] = ALL_LETTERS_MASK;
+                continue;
+            }
+            hasCross[r][c] = 1;
+
+            // Recorre el prefijo vertical en el DAWG.
+            let node = 0;
+            let ok = true;
+            for (let i = top + 1; i < r; i++) {
+                node = dawgEdge(node, grid[i][c]);
+                if (node < 0) { ok = false; break; }
+            }
+            if (!ok) { masks[r][c] = 0; continue; }
+
+            let mask = 0;
+            const end = dawg.edgeStart[node + 1];
+            for (let e = dawg.edgeStart[node]; e < end; e++) {
+                let n = dawg.edgeTarget[e];
+                let valid = true;
+                for (let i = r + 1; i < bottom; i++) {
+                    n = dawgEdge(n, grid[i][c]);
+                    if (n < 0) { valid = false; break; }
+                }
+                if (valid && dawg.final[n]) mask |= (1 << dawg.edgeLetter[e]);
+            }
+            masks[r][c] = mask;
+        }
+    }
+    return { masks, hasCross };
+};
+
+// Casillas ancla: vacías y adyacentes a una ficha (o el centro si está vacío).
+const computeAnchors = (grid) => {
+    const anchors = [];
+    for (let r = 0; r < BOARD_SIZE; r++) anchors.push(new Uint8Array(BOARD_SIZE));
+
+    if (isEmptyBoard(grid)) {
+        anchors[7][7] = 1;
+        return anchors;
+    }
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+            if (grid[r][c] >= 0) continue;
+            if ((r > 0 && grid[r - 1][c] >= 0) ||
+                (r < BOARD_SIZE - 1 && grid[r + 1][c] >= 0) ||
+                (c > 0 && grid[r][c - 1] >= 0) ||
+                (c < BOARD_SIZE - 1 && grid[r][c + 1] >= 0)) {
+                anchors[r][c] = 1;
+            }
+        }
+    }
+    return anchors;
+};
+
+// Puntuación real de una jugada ya construida, en la orientación de `grid`.
+const scorePlacement = (grid, blankGrid, row, startCol, letters, placedFlags, placedBlanks) => {
+    let mainSum = 0;
+    let wordMult = 1;
+    let crossTotal = 0;
+    let placedCount = 0;
+
+    for (let i = 0; i < letters.length; i++) {
+        const c = startCol + i;
+        const li = letters[i];
+
+        if (!placedFlags[i]) {
+            mainSum += blankGrid[row][c] ? 0 : TILE_VALUES[li];
+            continue;
+        }
+
+        placedCount++;
+        const value = placedBlanks[i] ? 0 : TILE_VALUES[li];
+        const lm = letterMultAt(row, c);
+        const wm = wordMultAt(row, c);
+        const letterScore = value * lm;
+        mainSum += letterScore;
+        wordMult *= wm;
+
+        // Palabra cruzada (perpendicular) generada por esta ficha.
+        let top = row - 1;
+        while (top >= 0 && grid[top][c] >= 0) top--;
+        let bottom = row + 1;
+        while (bottom < BOARD_SIZE && grid[bottom][c] >= 0) bottom++;
+        if (top === row - 1 && bottom === row + 1) continue;
+
+        let crossSum = letterScore;
+        for (let rr = top + 1; rr < row; rr++) crossSum += blankGrid[rr][c] ? 0 : TILE_VALUES[grid[rr][c]];
+        for (let rr = row + 1; rr < bottom; rr++) crossSum += blankGrid[rr][c] ? 0 : TILE_VALUES[grid[rr][c]];
+        crossTotal += crossSum * wm;
+    }
+
+    return {
+        score: mainSum * wordMult + crossTotal + (placedCount === 7 ? BINGO_BONUS : 0),
+        placedCount,
+        bingo: placedCount === 7,
+    };
+};
+
+// Genera todas las jugadas legales de una orientación y las acumula en `out`.
+const generateForGrid = (grid, blankGrid, rackCounts, blanksAvailable, mapCoord, out, seen) => {
+    const { masks } = computeCrossSets(grid);
+    const anchors = computeAnchors(grid);
+
+    const letters = [];      // índices de letra de la palabra en construcción
+    const placedFlags = [];  // ¿la ficha la ponemos nosotros?
+    const placedBlanks = []; // ¿usando comodín?
+    const rack = rackCounts.slice();
+    let blanks = blanksAvailable;
+
+    const record = (row, startCol) => {
+        const res = scorePlacement(grid, blankGrid, row, startCol, letters, placedFlags, placedBlanks);
+        if (res.placedCount === 0) return;
+
+        const tiles = [];
+        let word = '';
+        let usedLetters = '';
+        let usedBlanks = 0;
+        for (let i = 0; i < letters.length; i++) {
+            word += ALPHABET[letters[i]];
+            if (!placedFlags[i]) continue;
+            const coord = mapCoord(row, startCol + i);
+            tiles.push({ row: coord.row, col: coord.col, letter: ALPHABET[letters[i]], blank: !!placedBlanks[i] });
+            if (placedBlanks[i]) usedBlanks++;
+            else usedLetters += ALPHABET[letters[i]];
+        }
+
+        // Una misma colocación física puede aparecer en ambas orientaciones.
+        const key = tiles.map(t => t.row + '-' + t.col + '-' + t.letter + (t.blank ? 'B' : '')).join('|');
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        const start = mapCoord(row, startCol);
+        out.push({
+            word,
+            score: res.score,
+            bingo: res.bingo,
+            row: start.row,
+            col: start.col,
+            direction: mapCoord === mapIdentity ? 'H' : 'V',
+            tiles,
+            usedLetters,
+            usedBlanks,
+        });
+    };
+
+    const extendRight = (row, col, node, anchorCol) => {
+        if (col >= BOARD_SIZE) {
+            if (dawg.final[node]) record(row, col - letters.length);
+            return;
+        }
+        if (grid[row][col] >= 0) {
+            const li = grid[row][col];
+            const next = dawgEdge(node, li);
+            if (next < 0) return;
+            letters.push(li); placedFlags.push(false); placedBlanks.push(false);
+            extendRight(row, col + 1, next, anchorCol);
+            letters.pop(); placedFlags.pop(); placedBlanks.pop();
+            return;
+        }
+
+        // Solo vale si la palabra llegó a cubrir el ancla; si termina antes,
+        // queda suelta en el tablero y la jugada sería ilegal.
+        if (dawg.final[node] && col > anchorCol) record(row, col - letters.length);
+
+        const mask = masks[row][col];
+        if (mask === 0) return;
+
+        const end = dawg.edgeStart[node + 1];
+        for (let e = dawg.edgeStart[node]; e < end; e++) {
+            const li = dawg.edgeLetter[e];
+            if ((mask & (1 << li)) === 0) continue;
+
+            // Preferimos la ficha real; el comodín solo si no tenemos la letra
+            // (usar el comodín nunca puntúa más, así que la elección es óptima).
+            let useBlank = false;
+            if (rack[li] > 0) rack[li]--;
+            else if (blanks > 0) { blanks--; useBlank = true; }
+            else continue;
+
+            letters.push(li); placedFlags.push(true); placedBlanks.push(useBlank);
+            extendRight(row, col + 1, dawg.edgeTarget[e], anchorCol);
+            letters.pop(); placedFlags.pop(); placedBlanks.pop();
+
+            if (useBlank) blanks++; else rack[li]++;
+        }
+    };
+
+    const leftPart = (row, anchorCol, node, limit) => {
+        extendRight(row, anchorCol, node, anchorCol);
+        if (limit <= 0) return;
+
+        const end = dawg.edgeStart[node + 1];
+        for (let e = dawg.edgeStart[node]; e < end; e++) {
+            const li = dawg.edgeLetter[e];
+            let useBlank = false;
+            if (rack[li] > 0) rack[li]--;
+            else if (blanks > 0) { blanks--; useBlank = true; }
+            else continue;
+
+            letters.push(li); placedFlags.push(true); placedBlanks.push(useBlank);
+            leftPart(row, anchorCol, dawg.edgeTarget[e], limit - 1);
+            letters.pop(); placedFlags.pop(); placedBlanks.pop();
+
+            if (useBlank) blanks++; else rack[li]++;
+        }
+    };
+
+    for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+            if (!anchors[row][col]) continue;
+
+            if (col > 0 && grid[row][col - 1] >= 0) {
+                // Prefijo fijo: las fichas que ya están en el tablero.
+                let start = col - 1;
+                while (start > 0 && grid[row][start - 1] >= 0) start--;
+                let node = 0;
+                let ok = true;
+                for (let c = start; c < col; c++) {
+                    node = dawgEdge(node, grid[row][c]);
+                    if (node < 0) { ok = false; break; }
+                    letters.push(grid[row][c]); placedFlags.push(false); placedBlanks.push(false);
+                }
+                if (ok) extendRight(row, col, node, col);
+                letters.length = 0; placedFlags.length = 0; placedBlanks.length = 0;
+            } else {
+                // Hueco libre a la izquierda: cuántas casillas podemos usar.
+                let limit = 0;
+                let c = col - 1;
+                while (c >= 0 && grid[row][c] < 0 && !anchors[row][c]) { limit++; c--; }
+                leftPart(row, col, 0, limit);
+                letters.length = 0; placedFlags.length = 0; placedBlanks.length = 0;
+            }
+        }
+    }
+};
+
+const mapIdentity = (row, col) => ({ row, col });
+const mapTransposed = (row, col) => ({ row: col, col: row });
+
+// Deja restante tras la jugada, para la lectura de equity de la fase 2.
+const leaveAfterMove = (rackClean, blanks, usedLetters, usedBlanks) => {
+    const rackMap = createCharMap(rackClean);
+    for (const ch of usedLetters) if (rackMap[ch]) rackMap[ch]--;
+    const blanksLeft = Math.max(0, blanks - usedBlanks);
+
+    const leaveChars = Object.keys(rackMap).filter(c => rackMap[c] > 0).sort();
+    const leave = leaveChars.map(c => c.repeat(rackMap[c])).join('') + '*'.repeat(blanksLeft);
+    if (!leave) return { leave: '', leaveQuality: undefined };
+
+    const anyTriple = leaveChars.some(c => rackMap[c] >= 3);
+    const vowels = leaveChars.filter(c => 'aeiou'.includes(c));
+    const goodConsonants = leaveChars.filter(c => 'rslnt'.includes(c));
+    const rareConsonants = leaveChars.filter(c => !'aeiourslnt'.includes(c));
+
+    let leaveQuality;
+    if (anyTriple) leaveQuality = 'warn';
+    else if (rareConsonants.length >= 2 && vowels.length === 0) leaveQuality = 'warn';
+    else if (vowels.length > 0 && (goodConsonants.length > 0 || blanksLeft > 0)) leaveQuality = 'good';
+
+    return { leave, leaveQuality };
+};
+
+// Punto de entrada: recibe el tablero y el atril, devuelve las mejores jugadas.
+// board: 15 cadenas de 15 caracteres ('.' = vacía) · blanksBoard: 15 cadenas ('1' = comodín)
+const solveBoard = (board, blanksBoard, rackLetters, blanks, limit) => {
+    const grid = [];
+    const blankGrid = [];
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        const row = new Int8Array(BOARD_SIZE);
+        const brow = new Uint8Array(BOARD_SIZE);
+        const src = normalizeAccents((board[r] || '').toLowerCase());
+        const bsrc = blanksBoard && blanksBoard[r] ? blanksBoard[r] : '';
+        for (let c = 0; c < BOARD_SIZE; c++) {
+            const ch = src[c];
+            row[c] = (ch && LETTER_INDEX[ch] !== undefined) ? LETTER_INDEX[ch] : -1;
+            brow[c] = bsrc[c] === '1' ? 1 : 0;
+        }
+        grid.push(row);
+        blankGrid.push(brow);
+    }
+
+    const rackClean = cleanString(rackLetters);
+    const rackCounts = new Int32Array(ALPHABET.length);
+    for (const ch of rackClean) {
+        const li = LETTER_INDEX[ch];
+        if (li !== undefined) rackCounts[li]++;
+    }
+    if (rackClean.length === 0 && blanks === 0) return [];
+
+    const out = [];
+    const seen = new Set();
+    generateForGrid(grid, blankGrid, rackCounts, blanks, mapIdentity, out, seen);
+
+    const tGrid = transpose(grid);
+    const tBlank = transpose(blankGrid);
+    generateForGrid(tGrid, tBlank, rackCounts, blanks, mapTransposed, out, seen);
+
+    out.sort((a, b) => b.score - a.score || a.word.localeCompare(b.word, 'es'));
+    const top = out.slice(0, limit || 200);
+    for (const m of top) Object.assign(m, leaveAfterMove(rackClean, blanks, m.usedLetters, m.usedBlanks));
+    return { moves: top, total: out.length };
+};
+
 // --- Message Handler ---
 self.onmessage = (event) => {
     const { type, payload, dictionaryText } = event.data;
@@ -307,6 +826,18 @@ self.onmessage = (event) => {
             }
             self.postMessage({ type: 'ready', size: wordData.length });
 
+        } else if (type === 'warmupBoard') {
+            // La UI lo pide al abrir la pestaña de tablero para que el primer
+            // cálculo no pague la construcción del DAWG.
+            if (wordData.length > 0) ensureDawg();
+
+        } else if (type === 'solveBoard') {
+            if (wordData.length === 0) throw new Error('Dictionary not loaded yet.');
+            ensureDawg();
+            const { board, blanksBoard, rack, blanks = 0, limit = 200 } = payload;
+            const result = solveBoard(board, blanksBoard, rack, blanks, limit);
+            self.postMessage({ type: 'boardResult', data: result.moves, total: result.total });
+
         } else if (type === 'solve') {
             if (wordData.length === 0) throw new Error('Dictionary not loaded yet.');
             const { letters, pattern, blanks = 0, parallelMode = false } = payload;
@@ -315,6 +846,6 @@ self.onmessage = (event) => {
         }
     } catch (e) {
         console.error('Error in worker:', e);
-        self.postMessage({ type: 'result', data: [] });
+        self.postMessage({ type: type === 'solveBoard' ? 'boardResult' : 'result', data: [], total: 0 });
     }
 };

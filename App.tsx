@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import WordInput from './components/WordInput';
 import Results from './components/Results';
-import Toast from './components/Toast';
+import Toast, { ToastAction } from './components/Toast';
 import BoardPanel from './components/BoardPanel';
 import GameSwitcher from './components/GameSwitcher';
 import { FoundWord, SearchMode, BoardSlot, BoardMove, BoardState } from './types';
@@ -41,6 +41,7 @@ const App: React.FC = () => {
     const [activeLettersQuery, setActiveLettersQuery] = useState('');
     const [activePatternQuery, setActivePatternQuery] = useState('');
     const [toastMessage, setToastMessage] = useState<string | null>(null);
+    const [toastAction, setToastAction] = useState<ToastAction | null>(null);
 
     // --- Modo tablero (una partida activa entre varias) ---
     const [tab, setTab] = useState<Tab>('buscador');
@@ -54,6 +55,24 @@ const App: React.FC = () => {
     const [boardLoading, setBoardLoading] = useState(false);
     const [boardSearched, setBoardSearched] = useState(false);
     const [blockedWords, setBlockedWords] = useState<string[]>(loadBlocked);
+
+    const toastTimerRef = useRef<number | null>(null);
+    const closeToast = useCallback(() => {
+        if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
+        setToastMessage(null);
+        setToastAction(null);
+    }, []);
+
+    // Los avisos con acción (deshacer) duran más: hay que darte tiempo a leerlos.
+    const showToast = useCallback((msg: string, action?: ToastAction) => {
+        setToastMessage(msg);
+        setToastAction(action ?? null);
+        if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = window.setTimeout(() => {
+            setToastMessage(null);
+            setToastAction(null);
+        }, action ? 9000 : 3000);
+    }, []);
 
     const workerRef = useRef<Worker | null>(null);
 
@@ -249,12 +268,15 @@ const App: React.FC = () => {
     }, []);
 
     const handleDeleteGame = useCallback((id: string) => {
+        const deleted = games.find(g => g.id === id);
         const remaining = games.filter(g => g.id !== id);
         // El switcher oculta el botón con una sola partida; por si acaso.
-        if (remaining.length === 0) return;
+        if (!deleted || remaining.length === 0) return;
+
+        const wasActive = id === activeGameId;
         void deleteGame(id);
         setGames(remaining);
-        if (id === activeGameId) {
+        if (wasActive) {
             const next = remaining[0];
             skipSaveRef.current = true;
             setActiveGameId(next.id);
@@ -263,8 +285,30 @@ const App: React.FC = () => {
             setBoardRack(next.rack);
             setBoardBlanks(next.blanks);
         }
-        showToast('Partida eliminada');
-    }, [games, activeGameId]);
+
+        // Confirmar no basta: un toque de más en el móvil se lleva un tablero
+        // entero. Guardamos la partida y ofrecemos deshacer.
+        showToast(`«${deleted.name}» eliminada`, {
+            label: 'Deshacer',
+            icon: 'fa-rotate-left',
+            onClick: () => {
+                void saveGame(deleted);
+                setGames(prev =>
+                    prev.some(g => g.id === deleted.id)
+                        ? prev
+                        : [...prev, deleted].sort((a, b) => b.updatedAt - a.updatedAt));
+                if (wasActive) {
+                    skipSaveRef.current = true;
+                    setActiveGameId(deleted.id);
+                    persistActiveId(deleted.id);
+                    setBoard(deleted.board);
+                    setBoardRack(deleted.rack);
+                    setBoardBlanks(deleted.blanks);
+                }
+                closeToast();
+            },
+        });
+    }, [games, activeGameId, showToast, closeToast]);
 
     // Al abrir la pestaña de tablero preparamos el DAWG en segundo plano,
     // así el primer "Mejor jugada" ya lo encuentra listo.
@@ -283,13 +327,6 @@ const App: React.FC = () => {
         setHasSearched(false);
         setActiveLettersQuery('');
         setActivePatternQuery('');
-    }, []);
-
-    const toastTimerRef = useRef<number | null>(null);
-    const showToast = useCallback((msg: string) => {
-        setToastMessage(msg);
-        if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = window.setTimeout(() => setToastMessage(null), 3000);
     }, []);
 
     return (
@@ -393,7 +430,7 @@ const App: React.FC = () => {
                 </footer>
             </div>
 
-            <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
+            <Toast message={toastMessage} action={toastAction} onClose={closeToast} />
         </div>
     );
 };

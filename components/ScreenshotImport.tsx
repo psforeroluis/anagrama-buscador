@@ -3,6 +3,7 @@ import { BoardState } from '../types';
 import { BOARD_SIZE, emptyBoard, setCell } from '../services/boardLayout';
 import { CellRead, CropRect, autoDetectCrop, loadCrop, readBoard, saveCrop } from '../services/boardImage';
 import { countTemplates, learnGlyph, loadTemplates } from '../services/glyphStore';
+import Overlay from './Overlay';
 
 interface ScreenshotImportProps {
     onApply: (board: BoardState) => void;
@@ -241,7 +242,7 @@ const ScreenshotImport: React.FC<ScreenshotImportProps> = ({ onApply, onClose, o
     const misaligned = withTile >= 6 && doubtful.length > withTile * 0.4;
 
     return (
-        <div className="fixed inset-0 z-50 bg-ink-900/85 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto">
+        <Overlay className="items-start justify-center">
             <div className="surface edge-light rounded-4xl w-full max-w-3xl my-6 p-5 sm:p-6 relative">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-bold tracking-tight">
@@ -457,7 +458,7 @@ const ScreenshotImport: React.FC<ScreenshotImportProps> = ({ onApply, onClose, o
                     </div>
                 )}
             </div>
-        </div>
+        </Overlay>
     );
 };
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Game } from '../services/gamesStore';
 import { countTiles } from '../services/boardLayout';
+import Overlay from './Overlay';
 
 interface GameSwitcherProps {
     games: Game[];
@@ -23,14 +24,30 @@ const relativeTime = (ts: number): string => {
     return days === 1 ? 'ayer' : `hace ${days} días`;
 };
 
+/** Sin tildes ni mayúsculas, para que "Martín" se encuentre escribiendo "martin". */
+const foldText = (text: string): string =>
+    text.toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/ñ/g, 'n');
+
+/** Umbral a partir del cual el buscador aporta más de lo que estorba. */
+const SEARCH_FROM = 3;
+
 const GameSwitcher: React.FC<GameSwitcherProps> = ({
     games, activeId, onSelect, onCreate, onRename, onDelete, onExport, onImport,
 }) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [draft, setDraft] = useState('');
-    const [confirmingId, setConfirmingId] = useState<string | null>(null);
+    const [confirming, setConfirming] = useState<Game | null>(null);
+    const [query, setQuery] = useState('');
     const editRef = useRef<HTMLInputElement | null>(null);
     const fileRef = useRef<HTMLInputElement | null>(null);
+
+    const showSearch = games.length >= SEARCH_FROM;
+    const needle = foldText(query.trim());
+    const visible = needle
+        ? games.filter(g => foldText(g.name).includes(needle))
+        : games;
 
     useEffect(() => { if (editingId) editRef.current?.select(); }, [editingId]);
 
@@ -84,15 +101,44 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({
                 </div>
             </div>
 
+            {showSearch && (
+                <div className="relative mb-2">
+                    <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-subtle/50 text-xs" />
+                    <input
+                        type="text"
+                        value={query}
+                        onChange={e => setQuery(e.target.value)}
+                        placeholder="Buscar partida…"
+                        className="w-full pl-9 pr-9 py-2 surface-inset rounded-xl text-sm text-white placeholder-brand-subtle/40 focus:outline-none focus:border-accent/60 focus:ring-2 focus:ring-accent/15 transition-all"
+                        aria-label="Buscar partida por nombre"
+                    />
+                    {query && (
+                        <button
+                            type="button"
+                            onClick={() => setQuery('')}
+                            className="focus-ring absolute right-3 top-1/2 -translate-y-1/2 text-brand-subtle/60 hover:text-white transition-colors text-xs"
+                            aria-label="Borrar búsqueda"
+                        >
+                            <i className="fa-solid fa-circle-xmark" />
+                        </button>
+                    )}
+                </div>
+            )}
+
             <div className="flex flex-col gap-1.5 max-h-[240px] overflow-y-auto pr-1">
-                {games.map(game => {
+                {visible.length === 0 && (
+                    <p className="text-xs text-brand-subtle/60 px-3.5 py-3">
+                        Ninguna partida se llama así.
+                    </p>
+                )}
+                {visible.map(game => {
                     const isActive = game.id === activeId;
                     const tiles = countTiles(game.board.letters);
 
                     return (
                         <div
                             key={game.id}
-                            onClick={() => { if (!isActive) { onSelect(game.id); setConfirmingId(null); } }}
+                            onClick={() => { if (!isActive) onSelect(game.id); }}
                             className={`group relative rounded-xl px-3.5 py-2.5 flex items-center gap-3 transition-all cursor-pointer ${
                                 isActive
                                     ? 'bg-accent/15 shadow-[inset_0_0_0_1.5px_rgba(167,139,250,.5)]'
@@ -135,7 +181,7 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({
                             </span>
 
                             {editingId !== game.id && (
-                                <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                <div className="flex gap-1 shrink-0 opacity-60 sm:opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                     <button
                                         type="button"
                                         onClick={e => { e.stopPropagation(); startRename(game); }}
@@ -147,36 +193,13 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({
                                     {games.length > 1 && (
                                         <button
                                             type="button"
-                                            onClick={e => { e.stopPropagation(); setConfirmingId(game.id); }}
+                                            onClick={e => { e.stopPropagation(); setConfirming(game); }}
                                             className="focus-ring w-7 h-7 rounded-lg text-brand-subtle/70 hover:text-red-300 hover:bg-red-500/15 transition-colors text-[11px]"
                                             aria-label={`Eliminar ${game.name}`}
                                         >
                                             <i className="fa-solid fa-trash-can" />
                                         </button>
                                     )}
-                                </div>
-                            )}
-
-                            {confirmingId === game.id && (
-                                <div
-                                    className="absolute inset-0 rounded-xl bg-ink-800/95 flex items-center justify-end gap-2 px-3.5 text-xs z-10"
-                                    onClick={e => e.stopPropagation()}
-                                >
-                                    <span className="text-brand-subtle mr-auto truncate">¿Eliminar «{game.name}»?</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => { onDelete(game.id); setConfirmingId(null); }}
-                                        className="focus-ring px-2.5 py-1 rounded-lg bg-red-500/20 text-red-200 font-semibold hover:bg-red-500/30 transition-colors"
-                                    >
-                                        Sí
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setConfirmingId(null)}
-                                        className="focus-ring px-2.5 py-1 rounded-lg tile text-brand-subtle hover:text-white transition-colors"
-                                    >
-                                        No
-                                    </button>
                                 </div>
                             )}
                         </div>
@@ -195,6 +218,49 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({
             <p className="text-[11px] text-brand-subtle/50 mt-2 ml-1">
                 Cada partida guarda su tablero y su atril. Doble clic en el nombre para renombrarla.
             </p>
+
+            {/* Confirmación de borrado: en su propio diálogo y no donde acabas
+                de tocar la papelera, para que un toque de más no borre nada. */}
+            {confirming && (
+                <Overlay onClose={() => setConfirming(null)}>
+                    <div
+                        className="bg-ink-700 border border-white/10 rounded-3xl w-full max-w-sm p-6 my-auto shadow-[0_30px_80px_-20px_rgba(0,0,0,.95)]"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-start gap-3.5">
+                            <div className="w-10 h-10 rounded-2xl bg-red-500/15 flex items-center justify-center shrink-0">
+                                <i className="fa-solid fa-trash-can text-red-300" />
+                            </div>
+                            <div className="min-w-0">
+                                <h3 className="font-bold tracking-tight">¿Eliminar esta partida?</h3>
+                                <p className="text-sm text-brand-subtle mt-1 break-words">
+                                    <strong className="text-brand-text">{confirming.name}</strong>
+                                    {' · '}
+                                    {countTiles(confirming.board.letters)} fichas en el tablero
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col-reverse sm:flex-row gap-2.5 mt-6">
+                            <button
+                                type="button"
+                                onClick={() => setConfirming(null)}
+                                className="focus-ring flex-1 px-5 py-3 rounded-2xl bg-accent/15 text-accent-soft font-bold hover:bg-accent/25 transition-colors"
+                                autoFocus
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { onDelete(confirming.id); setConfirming(null); }}
+                                className="focus-ring flex-1 px-5 py-3 rounded-2xl tile text-red-300 font-semibold hover:bg-red-500/15 hover:text-red-200 transition-colors"
+                            >
+                                <i className="fa-solid fa-trash-can mr-2" />Eliminar
+                            </button>
+                        </div>
+                    </div>
+                </Overlay>
+            )}
         </div>
     );
 };

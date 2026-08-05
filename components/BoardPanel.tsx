@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import ScrabbleBoard from './ScrabbleBoard';
 import ScreenshotImport from './ScreenshotImport';
 import Spinner from './Spinner';
-import { BoardMove, BoardState } from '../types';
+import { BoardMove, BoardState, MoveRanking } from '../types';
 import { censusTiles, countTiles, emptyBoard, setCell } from '../services/boardLayout';
 
 interface BoardPanelProps {
@@ -20,6 +20,8 @@ interface BoardPanelProps {
     onBlanksChange: (n: number) => void;
     onSolve: () => void;
     onShowToast: (msg: string) => void;
+    ranking: MoveRanking;
+    onRankingChange: (r: MoveRanking) => void;
     blockedWords: string[];
     onBlockWord: (word: string) => void;
     onUnblockWord: (word: string) => void;
@@ -33,7 +35,7 @@ const moveLabel = (m: BoardMove) =>
 const BoardPanel: React.FC<BoardPanelProps> = ({
     board, rack, blanks, moves, totalMoves, isLoading, isWorkerReady, loadError,
     hasSearched, onBoardChange, onRackChange, onBlanksChange, onSolve, onShowToast,
-    blockedWords, onBlockWord, onUnblockWord,
+    ranking, onRankingChange, blockedWords, onBlockWord, onUnblockWord,
 }) => {
     const [selected, setSelected] = useState<BoardMove | null>(null);
     const [importing, setImporting] = useState(false);
@@ -213,6 +215,25 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                         </p>
                     ) : (
                         <>
+                            <div className="flex items-center gap-1.5 pb-2.5">
+                                {([['equity', 'Óptima'], ['score', 'Más puntos']] as const).map(([id, label]) => (
+                                    <button
+                                        key={id}
+                                        type="button"
+                                        onClick={() => onRankingChange(id)}
+                                        className={`focus-ring flex-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
+                                            ranking === id
+                                                ? 'bg-accent/15 text-accent-soft shadow-[inset_0_0_0_1px_rgba(167,139,250,.35)]'
+                                                : 'tile text-brand-subtle hover:text-white'
+                                        }`}
+                                        title={id === 'equity'
+                                            ? 'Ordena por puntos más el valor de las fichas que te quedas'
+                                            : 'Ordena solo por los puntos de esta jugada'}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
                             <div className="flex items-center justify-between px-1 pb-2 text-[11px] text-brand-subtle/70">
                                 <span>{totalMoves.toLocaleString('es')} jugadas legales</span>
                                 <span>mostrando {moves.length}</span>
@@ -245,6 +266,9 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                                                     {m.leave !== undefined && m.leave !== '' && (
                                                         <span className={m.leaveQuality === 'good' ? 'text-emerald-300/80' : m.leaveQuality === 'warn' ? 'text-amber-300/80' : ''}>
                                                             deja {m.leave.toUpperCase()}
+                                                            {m.leaveValue !== 0 && (
+                                                                <span className="opacity-70"> ({m.leaveValue > 0 ? '+' : ''}{m.leaveValue})</span>
+                                                            )}
                                                         </span>
                                                     )}
                                                     {isSel && (

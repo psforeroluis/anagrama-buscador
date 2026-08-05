@@ -12,9 +12,14 @@ export interface MoveTile {
     blank: boolean;
 }
 
+export type MoveRanking = 'equity' | 'score';
+
 export interface BoardMove {
     word: string;
     score: number;
+    /** Puntos más el valor de las fichas que te quedan. */
+    equity: number;
+    leaveValue: number;
     bingo: boolean;
     row: number;
     col: number;

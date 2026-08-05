@@ -5,8 +5,8 @@ import Results from './components/Results';
 import Toast, { ToastAction } from './components/Toast';
 import BoardPanel from './components/BoardPanel';
 import GameSwitcher from './components/GameSwitcher';
-import { FoundWord, SearchMode, BoardSlot, BoardMove, BoardState } from './types';
-import { emptyBoard } from './services/boardLayout';
+import { FoundWord, SearchMode, BoardSlot, BoardMove, BoardState, MoveRanking } from './types';
+import { censusTiles, emptyBoard } from './services/boardLayout';
 import {
     Game, createGame, deleteGame, initGames, listGames, nextGameName, saveGame,
     getActiveId, setActiveId as persistActiveId,
@@ -55,6 +55,7 @@ const App: React.FC = () => {
     const [boardLoading, setBoardLoading] = useState(false);
     const [boardSearched, setBoardSearched] = useState(false);
     const [blockedWords, setBlockedWords] = useState<string[]>(loadBlocked);
+    const [ranking, setRanking] = useState<MoveRanking>('equity');
 
     const toastTimerRef = useRef<number | null>(null);
     const closeToast = useCallback(() => {
@@ -125,10 +126,13 @@ const App: React.FC = () => {
     // --- Búsqueda de mejor jugada en el tablero ---
     // La lista de vetadas se pasa explícitamente para poder relanzar la
     // búsqueda con la lista recién cambiada, sin esperar al re-render.
-    const runBoardSearch = useCallback((blocked: string[]) => {
+    const runBoardSearch = useCallback((blocked: string[], rankBy: MoveRanking) => {
         if (!boardRack.trim() && boardBlanks === 0) return;
         setBoardLoading(true);
         setBoardSearched(true);
+        // Lo que queda en la bolsa: lo que no has visto, menos el atril del
+        // rival. Con la bolsa vacía ya no robas, así que el deje deja de contar.
+        const { unseen } = censusTiles(board.letters, board.blanks, boardRack, boardBlanks);
         workerRef.current?.postMessage({
             type: 'solveBoard',
             payload: {
@@ -138,28 +142,35 @@ const App: React.FC = () => {
                 blanks: boardBlanks,
                 limit: 120,
                 blocked,
+                bagSize: Math.max(0, unseen - 7),
+                rankBy,
             },
         });
     }, [board, boardRack, boardBlanks]);
 
     const handleSolveBoard = useCallback(
-        () => runBoardSearch(blockedWords),
-        [runBoardSearch, blockedWords],
+        () => runBoardSearch(blockedWords, ranking),
+        [runBoardSearch, blockedWords, ranking],
     );
+
+    const handleRankingChange = useCallback((next: MoveRanking) => {
+        setRanking(next);
+        if (boardSearched) runBoardSearch(blockedWords, next);
+    }, [boardSearched, runBoardSearch, blockedWords]);
 
     const handleBlockWord = useCallback((word: string) => {
         const next = blockWord(word);
         setBlockedWords(next);
         showToast(`${word.toUpperCase()} vetada: no volverá a sugerirse`);
-        if (boardSearched) runBoardSearch(next);
-    }, [boardSearched, runBoardSearch]);
+        if (boardSearched) runBoardSearch(next, ranking);
+    }, [boardSearched, runBoardSearch, ranking]);
 
     const handleUnblockWord = useCallback((word: string) => {
         const next = unblockWord(word);
         setBlockedWords(next);
         showToast(`${word.toUpperCase()} vuelve a estar permitida`);
-        if (boardSearched) runBoardSearch(next);
-    }, [boardSearched, runBoardSearch]);
+        if (boardSearched) runBoardSearch(next, ranking);
+    }, [boardSearched, runBoardSearch, ranking]);
 
     // --- Carga inicial de partidas (migra el tablero único de la versión previa) ---
     useEffect(() => {
@@ -385,6 +396,8 @@ const App: React.FC = () => {
                                 onBlanksChange={setBoardBlanks}
                                 onSolve={handleSolveBoard}
                                 onShowToast={showToast}
+                                ranking={ranking}
+                                onRankingChange={handleRankingChange}
                                 blockedWords={blockedWords}
                                 onBlockWord={handleBlockWord}
                                 onUnblockWord={handleUnblockWord}

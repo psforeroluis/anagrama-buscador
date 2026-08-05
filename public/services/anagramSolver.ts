@@ -739,7 +739,62 @@ const generateForGrid = (grid, blankGrid, rackCounts, blanksAvailable, mapCoord,
 const mapIdentity = (row, col) => ({ row, col });
 const mapTransposed = (row, col) => ({ row: col, col: row });
 
-// Deja restante tras la jugada, para la lectura de equity de la fase 2.
+// =====================================================================
+// EQUITY — cuánto vale la jugada de verdad, no solo lo que suma
+//
+// La jugada que más puntúa no siempre es la mejor: las fichas que te quedan
+// (el "deje") condicionan el turno siguiente. Aquí se le pone precio.
+// =====================================================================
+
+// Valor base de cada letra en el deje. Sale de medir, sobre este mismo
+// diccionario, cuánto se usa cada letra en palabras de 7-8 letras frente a lo
+// fácil que es sacarla de la bolsa: 2,2·ln(uso/frecuencia). Así la R o la S
+// suman porque rinden más de lo que cuestan, y la X o la Q restan.
+const LEAVE_VALUES = {
+    r: 1, a: 0.7, s: 0.6, m: 0.6, p: 0.3, n: 0.2, b: 0.2, i: 0.1, c: 0.1,
+    l: -0.1, f: -0.1, t: -0.1, v: -0.2, e: -0.2, j: -0.4, g: -0.5, o: -0.5,
+    z: -0.6, d: -0.8, u: -1.1, h: -1.3, 'ñ': -2.2, q: -2.6, y: -3.1, x: -4,
+};
+
+/** Un comodín en la mano vale más que cualquier ficha: guarda bingos. */
+const BLANK_LEAVE_VALUE = 22;
+
+/** Proporción de vocales que mejor funciona en un atril. */
+const IDEAL_VOWEL_RATIO = 0.4;
+
+/**
+ * Valor del deje. Suma el valor de cada letra y corrige por lo que la
+ * frecuencia sola no ve: repetidas, desequilibrio entre vocales y consonantes,
+ * y la Q huérfana, que en español sin U no se juega.
+ */
+const leaveValue = (leaveChars, counts, blanksLeft) => {
+    let value = blanksLeft * BLANK_LEAVE_VALUE;
+    let vowels = 0;
+    let letters = 0;
+
+    for (const ch of leaveChars) {
+        const n = counts[ch];
+        letters += n;
+        if ('aeiou'.includes(ch)) vowels += n;
+        value += (LEAVE_VALUES[ch] ?? 0) * n;
+
+        // Repetir ficha estorba: dos son un lastre y de tres en adelante, peor.
+        if (n >= 2) value -= 1.5 + (n - 2) * 3;
+    }
+
+    if (letters > 0) {
+        // Ni todo vocales ni todo consonantes: lo que ahoga un atril es el
+        // desequilibrio, no las letras en sí.
+        const ideal = letters * IDEAL_VOWEL_RATIO;
+        value -= Math.abs(vowels - ideal) * 2.2;
+    }
+
+    // Q sin U es una ficha muerta hasta que aparezca una.
+    if (counts.q > 0 && !(counts.u > 0) && blanksLeft === 0) value -= 6;
+
+    return Math.round(value * 10) / 10;
+};
+
 const leaveAfterMove = (rackClean, blanks, usedLetters, usedBlanks) => {
     const rackMap = createCharMap(rackClean);
     for (const ch of usedLetters) if (rackMap[ch]) rackMap[ch]--;
@@ -747,24 +802,17 @@ const leaveAfterMove = (rackClean, blanks, usedLetters, usedBlanks) => {
 
     const leaveChars = Object.keys(rackMap).filter(c => rackMap[c] > 0).sort();
     const leave = leaveChars.map(c => c.repeat(rackMap[c])).join('') + '*'.repeat(blanksLeft);
-    if (!leave) return { leave: '', leaveQuality: undefined };
+    if (!leave) return { leave: '', leaveValue: 0, leaveQuality: undefined };
 
-    const anyTriple = leaveChars.some(c => rackMap[c] >= 3);
-    const vowels = leaveChars.filter(c => 'aeiou'.includes(c));
-    const goodConsonants = leaveChars.filter(c => 'rslnt'.includes(c));
-    const rareConsonants = leaveChars.filter(c => !'aeiourslnt'.includes(c));
+    const value = leaveValue(leaveChars, rackMap, blanksLeft);
+    const leaveQuality = value >= 1 ? 'good' : value <= -4 ? 'warn' : undefined;
 
-    let leaveQuality;
-    if (anyTriple) leaveQuality = 'warn';
-    else if (rareConsonants.length >= 2 && vowels.length === 0) leaveQuality = 'warn';
-    else if (vowels.length > 0 && (goodConsonants.length > 0 || blanksLeft > 0)) leaveQuality = 'good';
-
-    return { leave, leaveQuality };
+    return { leave, leaveValue: value, leaveQuality };
 };
 
 // Punto de entrada: recibe el tablero y el atril, devuelve las mejores jugadas.
 // board: 15 cadenas de 15 caracteres ('.' = vacía) · blanksBoard: 15 cadenas ('1' = comodín)
-const solveBoard = (board, blanksBoard, rackLetters, blanks, limit) => {
+const solveBoard = (board, blanksBoard, rackLetters, blanks, limit, bagSize, rankBy) => {
     const grid = [];
     const blankGrid = [];
     for (let r = 0; r < BOARD_SIZE; r++) {
@@ -787,7 +835,9 @@ const solveBoard = (board, blanksBoard, rackLetters, blanks, limit) => {
         const li = LETTER_INDEX[ch];
         if (li !== undefined) rackCounts[li]++;
     }
-    if (rackClean.length === 0 && blanks === 0) return [];
+    // Sin fichas no hay nada que buscar. Devolvemos la misma forma que el resto
+    // de salidas: quien llama espera {moves, total}, no un array suelto.
+    if (rackClean.length === 0 && blanks === 0) return { moves: [], total: 0, leaveWeight: 0 };
 
     const out = [];
     const seen = new Set();
@@ -797,10 +847,20 @@ const solveBoard = (board, blanksBoard, rackLetters, blanks, limit) => {
     const tBlank = transpose(blankGrid);
     generateForGrid(tGrid, tBlank, rackCounts, blanks, mapTransposed, out, seen);
 
-    out.sort((a, b) => b.score - a.score || a.word.localeCompare(b.word, 'es'));
-    const top = out.slice(0, limit || 200);
-    for (const m of top) Object.assign(m, leaveAfterMove(rackClean, blanks, m.usedLetters, m.usedBlanks));
-    return { moves: top, total: out.length };
+    // El deje solo vale algo mientras queden fichas por robar. Al vaciarse la
+    // bolsa deja de importar con qué te quedas: solo cuentan los puntos.
+    const leaveWeight = Math.max(0, Math.min(1, bagSize / 7));
+
+    for (const m of out) {
+        Object.assign(m, leaveAfterMove(rackClean, blanks, m.usedLetters, m.usedBlanks));
+        m.equity = Math.round((m.score + m.leaveValue * leaveWeight) * 10) / 10;
+    }
+
+    const porEquity = (a, b) => b.equity - a.equity || b.score - a.score || a.word.localeCompare(b.word, 'es');
+    const porPuntos = (a, b) => b.score - a.score || a.word.localeCompare(b.word, 'es');
+    out.sort(rankBy === 'score' ? porPuntos : porEquity);
+
+    return { moves: out.slice(0, limit || 200), total: out.length, leaveWeight };
 };
 
 // --- Message Handler ---
@@ -865,10 +925,18 @@ self.onmessage = (event) => {
         } else if (type === 'solveBoard') {
             if (wordData.length === 0) throw new Error('Dictionary not loaded yet.');
             ensureDawg();
-            const { board, blanksBoard, rack, blanks = 0, limit = 200, blocked = [] } = payload;
+            const {
+                board, blanksBoard, rack, blanks = 0, limit = 200, blocked = [],
+                bagSize = 99, rankBy = 'equity',
+            } = payload;
             blockedWords = new Set(blocked);
-            const result = solveBoard(board, blanksBoard, rack, blanks, limit);
-            self.postMessage({ type: 'boardResult', data: result.moves, total: result.total });
+            const result = solveBoard(board, blanksBoard, rack, blanks, limit, bagSize, rankBy);
+            self.postMessage({
+                type: 'boardResult',
+                data: result.moves,
+                total: result.total,
+                leaveWeight: result.leaveWeight,
+            });
 
         } else if (type === 'solve') {
             if (wordData.length === 0) throw new Error('Dictionary not loaded yet.');

@@ -50,6 +50,41 @@ check('por puntos prefiere HAZ', r.data[0].word==='haz', `${r.data[0].word} ${r.
 r=send({type:'solveBoard',payload:{board:b,blanksBoard:zeros,rack:'edihaez',blanks:0,limit:50,bagSize:0,rankBy:'equity'}});
 check('bolsa vacía: equity = puntos', r.data.every(m=>m.equity===m.score));
 
+// 6b. defensa: simulación de la respuesta del rival
+const defensa=(o={})=>send({type:'solveBoard',payload:{board:b,blanksBoard:zeros,rack:'oleprn',blanks:0,limit:40,bagSize:50,rankBy:'defensa',...o}});
+r=defensa();
+check('defensa: toda candidata trae riesgo', r.data.every(m=>typeof m.risk==='number'), `${r.data.length} simuladas`);
+check('defensa: ordenada por equity neta',
+      r.data.every((m,i)=>i===0||r.data[i-1].netEquity>=m.netEquity));
+check('defensa: el riesgo discrimina',
+      new Set(r.data.map(m=>m.risk)).size>1,
+      `entre ${Math.min(...r.data.map(m=>m.risk))} y ${Math.max(...r.data.map(m=>m.risk))}`);
+const r2=defensa();
+check('defensa: mismo tablero, mismo consejo',
+      JSON.stringify(r.data.map(m=>[m.word,m.risk]))===JSON.stringify(r2.data.map(m=>[m.word,m.risk])));
+
+// El camino rápido (solo mejor tanteo) tiene que dar exactamente lo mismo que
+// la generación completa: si no, la simulación de la defensa mentiría.
+const gTras=b.map(x=>x.split(''));
+for(const t of r.data[0].tiles) gTras[t.row][t.col]=t.letter;
+const tableroTras=gTras.map(f=>f.join(''));
+
+const completa=send({type:'solveBoard',payload:{board:tableroTras,blanksBoard:zeros,rack:'aeiorst',blanks:0,limit:5000,rankBy:'score'}});
+const rapida=vm.runInContext(`(() => {
+  const grid=[], blankGrid=[];
+  const filas=${JSON.stringify(tableroTras)};
+  for (let r=0;r<15;r++){
+    const row=new Int8Array(15), brow=new Uint8Array(15);
+    for (let c=0;c<15;c++){ const ch=filas[r][c]; row[c]= ch==='.' ? -1 : LETTER_INDEX[ch]; brow[c]=0; }
+    grid.push(row); blankGrid.push(brow);
+  }
+  const counts=new Int32Array(ALPHABET.length);
+  for (const ch of 'aeiorst') counts[LETTER_INDEX[ch]]++;
+  return bestReply(grid, blankGrid, counts, 0);
+})()`, ctx);
+check('camino rápido = generación completa', completa.data[0].score===rapida,
+      `${completa.data[0].score} vs ${rapida}`);
+
 // 7. atril vacío no rompe
 r=send({type:'solveBoard',payload:{board:empty(),blanksBoard:zeros,rack:'',blanks:0}});
 check('atril vacío devuelve forma válida', Array.isArray(r.data)&&r.total===0);

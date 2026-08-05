@@ -12,7 +12,7 @@ export interface MoveTile {
     blank: boolean;
 }
 
-export type MoveRanking = 'equity' | 'score';
+export type MoveRanking = 'equity' | 'score' | 'defensa';
 
 export interface BoardMove {
     word: string;
@@ -20,6 +20,9 @@ export interface BoardMove {
     /** Puntos más el valor de las fichas que te quedan. */
     equity: number;
     leaveValue: number;
+    /** Solo en modo defensivo: lo que marcaría el rival tras esta jugada. */
+    risk?: number;
+    netEquity?: number;
     bingo: boolean;
     row: number;
     col: number;

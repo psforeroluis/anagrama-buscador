@@ -588,7 +588,12 @@ const crossWordAt = (grid, row, col, letterIdx) => {
     return word;
 };
 
-const generateForGrid = (grid, blankGrid, rackCounts, blanksAvailable, mapCoord, out, seen) => {
+/**
+ * @param best Si se pasa {score}, no se construyen los objetos de jugada: solo
+ *   se queda con el mejor tanteo. Lo usa la simulación de la respuesta del
+ *   rival, que se ejecuta muchas veces y solo necesita ese número.
+ */
+const generateForGrid = (grid, blankGrid, rackCounts, blanksAvailable, mapCoord, out, seen, best) => {
     const { masks } = computeCrossSets(grid);
     const anchors = computeAnchors(grid);
 
@@ -598,9 +603,28 @@ const generateForGrid = (grid, blankGrid, rackCounts, blanksAvailable, mapCoord,
     const rack = rackCounts.slice();
     let blanks = blanksAvailable;
 
+    const violaVeto = (row, startCol) => {
+        let word = '';
+        for (let i = 0; i < letters.length; i++) word += ALPHABET[letters[i]];
+        if (blockedWords.has(word)) return true;
+        for (let i = 0; i < letters.length; i++) {
+            if (!placedFlags[i]) continue;
+            const cross = crossWordAt(grid, row, startCol + i, letters[i]);
+            if (cross && blockedWords.has(cross)) return true;
+        }
+        return false;
+    };
+
     const record = (row, startCol) => {
         const res = scorePlacement(grid, blankGrid, row, startCol, letters, placedFlags, placedBlanks);
         if (res.placedCount === 0) return;
+
+        if (best) {
+            if (res.score <= best.score) return;
+            if (blockedWords.size > 0 && violaVeto(row, startCol)) return;
+            best.score = res.score;
+            return;
+        }
 
         const tiles = [];
         let word = '';
@@ -795,6 +819,115 @@ const leaveValue = (leaveChars, counts, blanksLeft) => {
     return Math.round(value * 10) / 10;
 };
 
+// =====================================================================
+// DEFENSA — qué le dejas al rival
+//
+// No basta con lo que sumas: una jugada que abre un triple palabra puede
+// costarte más de lo que gana. En vez de adivinarlo por la forma del tablero,
+// se aplica la jugada y se calcula lo que el rival podría hacer después.
+// =====================================================================
+
+const TILE_COUNTS = {
+    a: 12, b: 2, c: 4, d: 5, e: 12, f: 1, g: 2, h: 2, i: 6, j: 1,
+    l: 4, m: 2, n: 5, 'ñ': 1, o: 9, p: 2, q: 1, r: 5, s: 6, t: 4,
+    u: 5, v: 1, x: 1, y: 1, z: 1,
+};
+const BLANK_TILES = 2;
+const RACK_SIZE = 7;
+
+/** Cuántas finalistas se simulan en modo defensivo. */
+const DEFENCE_CANDIDATES = 40;
+
+/** Fichas que no has visto: bolsa más atril del rival. De ahí sale su mano. */
+const buildUnseenPool = (grid, blankGrid, rackCounts, blanks) => {
+    const counts = new Int32Array(ALPHABET.length);
+    for (const [letter, n] of Object.entries(TILE_COUNTS)) counts[LETTER_INDEX[letter]] = n;
+    let blanksLeft = BLANK_TILES - blanks;
+
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+            const li = grid[r][c];
+            if (li < 0) continue;
+            if (blankGrid[r][c]) blanksLeft--;
+            else counts[li]--;
+        }
+    }
+    for (let i = 0; i < counts.length; i++) counts[i] = Math.max(0, counts[i] - rackCounts[i]);
+
+    return { counts, blanks: Math.max(0, blanksLeft) };
+};
+
+/** Generador con semilla: la misma posición debe dar siempre el mismo consejo. */
+const makeRng = (seed) => () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+
+/** Roba siete fichas al azar de lo que queda sin ver. */
+const sampleRack = (pool, rng) => {
+    const bag = [];
+    for (let i = 0; i < pool.counts.length; i++) {
+        for (let n = 0; n < pool.counts[i]; n++) bag.push(i);
+    }
+    for (let n = 0; n < pool.blanks; n++) bag.push(-1);
+
+    const counts = new Int32Array(ALPHABET.length);
+    let blanks = 0;
+    const draws = Math.min(RACK_SIZE, bag.length);
+    for (let d = 0; d < draws; d++) {
+        const pick = Math.floor(rng() * bag.length);
+        const tile = bag[pick];
+        bag[pick] = bag[bag.length - 1];
+        bag.pop();
+        if (tile < 0) blanks++;
+        else counts[tile]++;
+    }
+    return { counts, blanks };
+};
+
+/** Mejor tanteo que consigue una mano concreta sobre un tablero concreto. */
+const bestReply = (grid, blankGrid, rackCounts, blanks) => {
+    const best = { score: 0 };
+    generateForGrid(grid, blankGrid, rackCounts, blanks, mapIdentity, null, null, best);
+    generateForGrid(transpose(grid), transpose(blankGrid), rackCounts, blanks, mapTransposed, null, null, best);
+    return best.score;
+};
+
+/** Copia del tablero con la jugada ya puesta. */
+const applyMove = (grid, blankGrid, move) => {
+    const g = grid.map(row => Int8Array.from(row));
+    const b = blankGrid.map(row => Uint8Array.from(row));
+    for (const t of move.tiles) {
+        g[t.row][t.col] = LETTER_INDEX[t.letter];
+        b[t.row][t.col] = t.blank ? 1 : 0;
+    }
+    return { grid: g, blankGrid: b };
+};
+
+/**
+ * Estima el riesgo de cada jugada: cuánto marcaría el rival justo después.
+ * Se prueban varias manos posibles y se promedia, porque su atril no se sabe.
+ * Solo se evalúan las mejores candidatas: simular las 20.000 sería absurdo.
+ */
+const addOpponentRisk = (moves, grid, blankGrid, rackCounts, blanks, samples) => {
+    const pool = buildUnseenPool(grid, blankGrid, rackCounts, blanks);
+    const rng = makeRng(1337);
+    const racks = [];
+    for (let s = 0; s < samples; s++) racks.push(sampleRack(pool, rng));
+
+    for (const move of moves) {
+        const after = applyMove(grid, blankGrid, move);
+        let total = 0;
+        for (const rack of racks) {
+            total += bestReply(after.grid, after.blankGrid, rack.counts, rack.blanks);
+        }
+        move.risk = Math.round((total / racks.length) * 10) / 10;
+        move.netEquity = Math.round((move.equity - move.risk) * 10) / 10;
+    }
+};
+
 const leaveAfterMove = (rackClean, blanks, usedLetters, usedBlanks) => {
     const rackMap = createCharMap(rackClean);
     for (const ch of usedLetters) if (rackMap[ch]) rackMap[ch]--;
@@ -812,7 +945,7 @@ const leaveAfterMove = (rackClean, blanks, usedLetters, usedBlanks) => {
 
 // Punto de entrada: recibe el tablero y el atril, devuelve las mejores jugadas.
 // board: 15 cadenas de 15 caracteres ('.' = vacía) · blanksBoard: 15 cadenas ('1' = comodín)
-const solveBoard = (board, blanksBoard, rackLetters, blanks, limit, bagSize, rankBy) => {
+const solveBoard = (board, blanksBoard, rackLetters, blanks, limit, bagSize, rankBy, samples) => {
     const grid = [];
     const blankGrid = [];
     for (let r = 0; r < BOARD_SIZE; r++) {
@@ -860,7 +993,20 @@ const solveBoard = (board, blanksBoard, rackLetters, blanks, limit, bagSize, ran
     const porPuntos = (a, b) => b.score - a.score || a.word.localeCompare(b.word, 'es');
     out.sort(rankBy === 'score' ? porPuntos : porEquity);
 
-    return { moves: out.slice(0, limit || 200), total: out.length, leaveWeight };
+    if (rankBy !== 'defensa') {
+        return { moves: out.slice(0, limit || 200), total: out.length, leaveWeight };
+    }
+
+    // Simular la respuesta del rival cuesta, así que se hace sobre un puñado de
+    // finalistas —las que ya venían bien colocadas por equity— y no sobre las
+    // miles de jugadas legales. Se devuelven solo esas: mezclar simuladas con
+    // no simuladas en la misma lista daría un orden sin sentido.
+    const finalistas = out.slice(0, Math.min(limit || 200, DEFENCE_CANDIDATES));
+    addOpponentRisk(finalistas, grid, blankGrid, rackCounts, blanks, samples || 3);
+    finalistas.sort((a, b) => b.netEquity - a.netEquity || b.score - a.score
+        || a.word.localeCompare(b.word, 'es'));
+
+    return { moves: finalistas, total: out.length, leaveWeight, simulated: finalistas.length };
 };
 
 // --- Message Handler ---
@@ -927,15 +1073,16 @@ self.onmessage = (event) => {
             ensureDawg();
             const {
                 board, blanksBoard, rack, blanks = 0, limit = 200, blocked = [],
-                bagSize = 99, rankBy = 'equity',
+                bagSize = 99, rankBy = 'equity', samples = 3,
             } = payload;
             blockedWords = new Set(blocked);
-            const result = solveBoard(board, blanksBoard, rack, blanks, limit, bagSize, rankBy);
+            const result = solveBoard(board, blanksBoard, rack, blanks, limit, bagSize, rankBy, samples);
             self.postMessage({
                 type: 'boardResult',
                 data: result.moves,
                 total: result.total,
                 leaveWeight: result.leaveWeight,
+                simulated: result.simulated,
             });
 
         } else if (type === 'solve') {

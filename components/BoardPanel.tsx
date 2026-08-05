@@ -216,7 +216,7 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                     ) : (
                         <>
                             <div className="flex items-center gap-1.5 pb-2.5">
-                                {([['equity', 'Óptima'], ['score', 'Más puntos']] as const).map(([id, label]) => (
+                                {([['equity', 'Óptima'], ['score', 'Más puntos'], ['defensa', 'Defensiva']] as const).map(([id, label]) => (
                                     <button
                                         key={id}
                                         type="button"
@@ -226,9 +226,13 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                                                 ? 'bg-accent/15 text-accent-soft shadow-[inset_0_0_0_1px_rgba(167,139,250,.35)]'
                                                 : 'tile text-brand-subtle hover:text-white'
                                         }`}
-                                        title={id === 'equity'
-                                            ? 'Ordena por puntos más el valor de las fichas que te quedas'
-                                            : 'Ordena solo por los puntos de esta jugada'}
+                                        title={
+                                            id === 'equity'
+                                                ? 'Ordena por puntos más el valor de las fichas que te quedas'
+                                                : id === 'score'
+                                                ? 'Ordena solo por los puntos de esta jugada'
+                                                : 'Simula la respuesta del rival y descuenta lo que le dejas marcar'
+                                        }
                                     >
                                         {label}
                                     </button>
@@ -263,6 +267,15 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                                                         {moveLabel(m)}
                                                     </span>
                                                     <span>{m.tiles.length} fichas</span>
+                                                    {m.risk !== undefined && (
+                                                        <span
+                                                            className={m.risk >= 45 ? 'text-red-300/85' : m.risk >= 30 ? 'text-amber-300/80' : 'text-emerald-300/80'}
+                                                            title="Lo que marcaría el rival justo después, según la simulación"
+                                                        >
+                                                            <i className="fa-solid fa-shield-halved mr-1" />
+                                                            rival ~{Math.round(m.risk)}
+                                                        </span>
+                                                    )}
                                                     {m.leave !== undefined && m.leave !== '' && (
                                                         <span className={m.leaveQuality === 'good' ? 'text-emerald-300/80' : m.leaveQuality === 'warn' ? 'text-amber-300/80' : ''}>
                                                             deja {m.leave.toUpperCase()}

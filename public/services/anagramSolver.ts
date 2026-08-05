@@ -241,6 +241,7 @@ const solve = (letters, pattern, blanks, parallelMode) => {
     const deduped = [];
     for (const word of results) {
         const key = normalizeAccents(word);
+        if (blockedWords.has(key)) continue;
         if (!seen.has(key)) { seen.add(key); deduped.push(word); }
     }
 
@@ -568,6 +569,25 @@ const scorePlacement = (grid, blankGrid, row, startCol, letters, placedFlags, pl
 };
 
 // Genera todas las jugadas legales de una orientación y las acumula en `out`.
+// Palabras que el diccionario acepta pero el juego de Luis no. Se rellena en
+// cada consulta desde la lista que guarda la interfaz.
+let blockedWords = new Set();
+
+/** Palabra perpendicular que formaría una ficha colocada, o '' si no hay vecinos. */
+const crossWordAt = (grid, row, col, letterIdx) => {
+    let top = row - 1;
+    while (top >= 0 && grid[top][col] >= 0) top--;
+    let bottom = row + 1;
+    while (bottom < BOARD_SIZE && grid[bottom][col] >= 0) bottom++;
+    if (top === row - 1 && bottom === row + 1) return '';
+
+    let word = '';
+    for (let r = top + 1; r < row; r++) word += ALPHABET[grid[r][col]];
+    word += ALPHABET[letterIdx];
+    for (let r = row + 1; r < bottom; r++) word += ALPHABET[grid[r][col]];
+    return word;
+};
+
 const generateForGrid = (grid, blankGrid, rackCounts, blanksAvailable, mapCoord, out, seen) => {
     const { masks } = computeCrossSets(grid);
     const anchors = computeAnchors(grid);
@@ -593,6 +613,17 @@ const generateForGrid = (grid, blankGrid, rackCounts, blanksAvailable, mapCoord,
             tiles.push({ row: coord.row, col: coord.col, letter: ALPHABET[letters[i]], blank: !!placedBlanks[i] });
             if (placedBlanks[i]) usedBlanks++;
             else usedLetters += ALPHABET[letters[i]];
+        }
+
+        // Palabras vetadas: descartamos tanto la principal como cualquier
+        // cruzada que genere la jugada, que también tendría que ser válida.
+        if (blockedWords.size > 0) {
+            if (blockedWords.has(word)) return;
+            for (let i = 0; i < letters.length; i++) {
+                if (!placedFlags[i]) continue;
+                const cross = crossWordAt(grid, row, startCol + i, letters[i]);
+                if (cross && blockedWords.has(cross)) return;
+            }
         }
 
         // Una misma colocación física puede aparecer en ambas orientaciones.
@@ -834,13 +865,15 @@ self.onmessage = (event) => {
         } else if (type === 'solveBoard') {
             if (wordData.length === 0) throw new Error('Dictionary not loaded yet.');
             ensureDawg();
-            const { board, blanksBoard, rack, blanks = 0, limit = 200 } = payload;
+            const { board, blanksBoard, rack, blanks = 0, limit = 200, blocked = [] } = payload;
+            blockedWords = new Set(blocked);
             const result = solveBoard(board, blanksBoard, rack, blanks, limit);
             self.postMessage({ type: 'boardResult', data: result.moves, total: result.total });
 
         } else if (type === 'solve') {
             if (wordData.length === 0) throw new Error('Dictionary not loaded yet.');
-            const { letters, pattern, blanks = 0, parallelMode = false } = payload;
+            const { letters, pattern, blanks = 0, parallelMode = false, blocked = [] } = payload;
+            blockedWords = new Set(blocked);
             const results = solve(letters, pattern, blanks, parallelMode);
             self.postMessage({ type: 'result', data: results });
         }

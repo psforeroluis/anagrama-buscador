@@ -130,6 +130,46 @@ export const learnGlyph = async (letter: string, glyph: Glyph): Promise<void> =>
     writeFallback([...next, record]);
 };
 
+/** Vuelca las plantillas tal cual para la copia de seguridad. */
+export const exportTemplates = async (): Promise<{ letter: string; bits: string }[]> =>
+    (await allRecords()).map(r => ({ letter: r.letter, bits: r.bits }));
+
+/**
+ * Restaura plantillas de una copia. A diferencia de learnGlyph no aplica el
+ * descarte de plantillas parecidas: una copia tiene que volver tal cual, no
+ * filtrada.
+ */
+export const importTemplates = async (samples: { letter: string; bits: string }[]): Promise<number> => {
+    const existing = await allRecords();
+    const known = new Set(existing.map(r => r.letter + '|' + r.bits));
+    const nuevos: SampleRecord[] = [];
+
+    for (const sample of samples) {
+        if (typeof sample?.letter !== 'string' || typeof sample?.bits !== 'string') continue;
+        if (!decode(sample.bits)) continue;
+        const key = sample.letter + '|' + sample.bits;
+        if (known.has(key)) continue;
+        known.add(key);
+        nuevos.push({
+            id: `${sample.letter}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            letter: sample.letter,
+            bits: sample.bits,
+            createdAt: Date.now(),
+        });
+    }
+
+    if (nuevos.length === 0) return 0;
+
+    if (!useFallback) {
+        try {
+            for (const record of nuevos) await tx('readwrite', s => s.put(record));
+            return nuevos.length;
+        } catch { useFallback = true; }
+    }
+    writeFallback([...readFallback(), ...nuevos]);
+    return nuevos.length;
+};
+
 export const countTemplates = async (): Promise<{ letters: number; samples: number }> => {
     const records = await allRecords();
     return { letters: new Set(records.map(r => r.letter)).size, samples: records.length };

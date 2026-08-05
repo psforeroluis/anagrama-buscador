@@ -9,6 +9,8 @@ interface GameSwitcherProps {
     onCreate: () => void;
     onRename: (id: string, name: string) => void;
     onDelete: (id: string) => void;
+    onExport: () => void;
+    onImport: (file: File) => void;
 }
 
 const relativeTime = (ts: number): string => {
@@ -21,11 +23,14 @@ const relativeTime = (ts: number): string => {
     return days === 1 ? 'ayer' : `hace ${days} días`;
 };
 
-const GameSwitcher: React.FC<GameSwitcherProps> = ({ games, activeId, onSelect, onCreate, onRename, onDelete }) => {
+const GameSwitcher: React.FC<GameSwitcherProps> = ({
+    games, activeId, onSelect, onCreate, onRename, onDelete, onExport, onImport,
+}) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [draft, setDraft] = useState('');
     const [confirmingId, setConfirmingId] = useState<string | null>(null);
     const editRef = useRef<HTMLInputElement | null>(null);
+    const fileRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => { if (editingId) editRef.current?.select(); }, [editingId]);
 
@@ -42,8 +47,44 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({ games, activeId, onSelect, 
     };
 
     return (
-        <div className="mb-4">
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <div className="mb-5">
+            <div className="flex items-center justify-between mb-2.5 ml-0.5 gap-3 flex-wrap">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-subtle">
+                    <i className="fa-solid fa-layer-group mr-2" />
+                    Partidas · {games.length}
+                </span>
+                <div className="flex items-center gap-3 text-xs">
+                    <button
+                        type="button"
+                        onClick={onExport}
+                        className="focus-ring text-brand-subtle/80 hover:text-accent-soft transition-colors"
+                        title="Descargar una copia de todas las partidas"
+                    >
+                        <i className="fa-solid fa-download mr-1.5" />Exportar
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => fileRef.current?.click()}
+                        className="focus-ring text-brand-subtle/80 hover:text-accent-soft transition-colors"
+                        title="Restaurar partidas desde una copia"
+                    >
+                        <i className="fa-solid fa-upload mr-1.5" />Importar
+                    </button>
+                    <input
+                        ref={fileRef}
+                        type="file"
+                        accept="application/json,.json"
+                        className="hidden"
+                        onChange={e => {
+                            const file = e.target.files?.[0];
+                            e.target.value = '';
+                            if (file) onImport(file);
+                        }}
+                    />
+                </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5 max-h-[240px] overflow-y-auto pr-1">
                 {games.map(game => {
                     const isActive = game.id === activeId;
                     const tiles = countTiles(game.board.letters);
@@ -52,48 +93,53 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({ games, activeId, onSelect, 
                         <div
                             key={game.id}
                             onClick={() => { if (!isActive) { onSelect(game.id); setConfirmingId(null); } }}
-                            className={`group relative shrink-0 rounded-2xl px-3.5 py-2.5 min-w-[168px] transition-all cursor-pointer ${
+                            className={`group relative rounded-xl px-3.5 py-2.5 flex items-center gap-3 transition-all cursor-pointer ${
                                 isActive
                                     ? 'bg-accent/15 shadow-[inset_0_0_0_1.5px_rgba(167,139,250,.5)]'
                                     : 'tile hover:bg-white/[.05]'
                             }`}
                         >
-                            {editingId === game.id ? (
-                                <input
-                                    ref={editRef}
-                                    value={draft}
-                                    autoFocus
-                                    onChange={e => setDraft(e.target.value)}
-                                    onBlur={commitRename}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
-                                        if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
-                                    }}
-                                    onClick={e => e.stopPropagation()}
-                                    className="w-full bg-transparent text-sm font-semibold text-white outline-none border-b border-accent/50 pb-0.5"
-                                    aria-label="Nombre de la partida"
-                                />
-                            ) : (
-                                <div
-                                    onDoubleClick={e => { e.stopPropagation(); startRename(game); }}
-                                    className={`text-sm font-semibold truncate pr-10 ${isActive ? 'text-accent-soft' : 'text-brand-text'}`}
-                                >
-                                    {game.name}
-                                </div>
-                            )}
+                            <i className={`fa-solid fa-table-cells text-xs shrink-0 ${isActive ? 'text-accent-soft' : 'text-brand-subtle/40'}`} />
 
-                            <div className="text-[11px] text-brand-subtle/70 mt-0.5 flex items-center gap-2">
-                                <span>{tiles} fichas</span>
-                                <span className="opacity-50">·</span>
-                                <span>{relativeTime(game.updatedAt)}</span>
+                            <div className="min-w-0 flex-1">
+                                {editingId === game.id ? (
+                                    <input
+                                        ref={editRef}
+                                        value={draft}
+                                        autoFocus
+                                        onChange={e => setDraft(e.target.value)}
+                                        onBlur={commitRename}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+                                            if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
+                                        }}
+                                        onClick={e => e.stopPropagation()}
+                                        className="w-full bg-transparent text-sm font-semibold text-white outline-none border-b border-accent/50 pb-0.5"
+                                        aria-label="Nombre de la partida"
+                                    />
+                                ) : (
+                                    <div
+                                        onDoubleClick={e => { e.stopPropagation(); startRename(game); }}
+                                        className={`text-sm font-semibold truncate ${isActive ? 'text-accent-soft' : 'text-brand-text'}`}
+                                    >
+                                        {game.name}
+                                    </div>
+                                )}
                             </div>
 
+                            <span className="text-[11px] text-brand-subtle/70 shrink-0 hidden sm:block">
+                                {tiles} fichas
+                            </span>
+                            <span className="text-[11px] text-brand-subtle/50 shrink-0 w-[76px] text-right hidden sm:block">
+                                {relativeTime(game.updatedAt)}
+                            </span>
+
                             {editingId !== game.id && (
-                                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                     <button
                                         type="button"
                                         onClick={e => { e.stopPropagation(); startRename(game); }}
-                                        className="focus-ring w-6 h-6 rounded-lg text-brand-subtle/70 hover:text-white hover:bg-white/10 transition-colors text-[11px]"
+                                        className="focus-ring w-7 h-7 rounded-lg text-brand-subtle/70 hover:text-white hover:bg-white/10 transition-colors text-[11px]"
                                         aria-label={`Renombrar ${game.name}`}
                                     >
                                         <i className="fa-solid fa-pen" />
@@ -102,7 +148,7 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({ games, activeId, onSelect, 
                                         <button
                                             type="button"
                                             onClick={e => { e.stopPropagation(); setConfirmingId(game.id); }}
-                                            className="focus-ring w-6 h-6 rounded-lg text-brand-subtle/70 hover:text-red-300 hover:bg-red-500/15 transition-colors text-[11px]"
+                                            className="focus-ring w-7 h-7 rounded-lg text-brand-subtle/70 hover:text-red-300 hover:bg-red-500/15 transition-colors text-[11px]"
                                             aria-label={`Eliminar ${game.name}`}
                                         >
                                             <i className="fa-solid fa-trash-can" />
@@ -113,21 +159,21 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({ games, activeId, onSelect, 
 
                             {confirmingId === game.id && (
                                 <div
-                                    className="absolute inset-0 rounded-2xl bg-ink-800/95 flex items-center justify-center gap-2 text-xs z-10"
+                                    className="absolute inset-0 rounded-xl bg-ink-800/95 flex items-center justify-end gap-2 px-3.5 text-xs z-10"
                                     onClick={e => e.stopPropagation()}
                                 >
-                                    <span className="text-brand-subtle">¿Eliminar?</span>
+                                    <span className="text-brand-subtle mr-auto truncate">¿Eliminar «{game.name}»?</span>
                                     <button
                                         type="button"
                                         onClick={() => { onDelete(game.id); setConfirmingId(null); }}
-                                        className="focus-ring px-2 py-1 rounded-lg bg-red-500/20 text-red-200 font-semibold hover:bg-red-500/30 transition-colors"
+                                        className="focus-ring px-2.5 py-1 rounded-lg bg-red-500/20 text-red-200 font-semibold hover:bg-red-500/30 transition-colors"
                                     >
                                         Sí
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setConfirmingId(null)}
-                                        className="focus-ring px-2 py-1 rounded-lg tile text-brand-subtle hover:text-white transition-colors"
+                                        className="focus-ring px-2.5 py-1 rounded-lg tile text-brand-subtle hover:text-white transition-colors"
                                     >
                                         No
                                     </button>
@@ -136,17 +182,17 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({ games, activeId, onSelect, 
                         </div>
                     );
                 })}
-
-                <button
-                    type="button"
-                    onClick={onCreate}
-                    className="focus-ring shrink-0 rounded-2xl px-4 py-2.5 border border-dashed border-white/15 text-brand-subtle/70 hover:border-accent/60 hover:text-accent-soft transition-all text-sm font-semibold h-full min-h-[62px]"
-                >
-                    <i className="fa-solid fa-plus mr-2" />Nueva partida
-                </button>
             </div>
 
-            <p className="text-[11px] text-brand-subtle/50 mt-1.5 ml-1">
+            <button
+                type="button"
+                onClick={onCreate}
+                className="focus-ring w-full mt-1.5 rounded-xl px-3.5 py-2.5 border border-dashed border-white/15 text-brand-subtle/70 hover:border-accent/60 hover:text-accent-soft transition-all text-sm font-semibold text-left"
+            >
+                <i className="fa-solid fa-plus mr-2.5" />Nueva partida
+            </button>
+
+            <p className="text-[11px] text-brand-subtle/50 mt-2 ml-1">
                 Cada partida guarda su tablero y su atril. Doble clic en el nombre para renombrarla.
             </p>
         </div>

@@ -20,6 +20,9 @@ interface BoardPanelProps {
     onBlanksChange: (n: number) => void;
     onSolve: () => void;
     onShowToast: (msg: string) => void;
+    blockedWords: string[];
+    onBlockWord: (word: string) => void;
+    onUnblockWord: (word: string) => void;
 }
 
 const COLS = 'ABCDEFGHIJKLMNO';
@@ -30,9 +33,11 @@ const moveLabel = (m: BoardMove) =>
 const BoardPanel: React.FC<BoardPanelProps> = ({
     board, rack, blanks, moves, totalMoves, isLoading, isWorkerReady, loadError,
     hasSearched, onBoardChange, onRackChange, onBlanksChange, onSolve, onShowToast,
+    blockedWords, onBlockWord, onUnblockWord,
 }) => {
     const [selected, setSelected] = useState<BoardMove | null>(null);
     const [importing, setImporting] = useState(false);
+    const [showBlocked, setShowBlocked] = useState(false);
 
     const tilesOnBoard = useMemo(() => countTiles(board.letters), [board.letters]);
     const rackCount = rack.trim().length + blanks;
@@ -243,13 +248,23 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                                                         </span>
                                                     )}
                                                     {isSel && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={e => { e.stopPropagation(); applyMove(m); }}
-                                                            className="focus-ring ml-auto text-accent-soft hover:text-white font-semibold"
-                                                        >
-                                                            <i className="fa-solid fa-check mr-1" />Aplicar
-                                                        </button>
+                                                        <span className="ml-auto flex items-center gap-3">
+                                                            <button
+                                                                type="button"
+                                                                onClick={e => { e.stopPropagation(); onBlockWord(m.word); }}
+                                                                className="focus-ring text-brand-subtle/70 hover:text-red-300 font-semibold"
+                                                                title={`Vetar ${m.word.toUpperCase()}: no volverá a sugerirse`}
+                                                            >
+                                                                <i className="fa-solid fa-ban mr-1" />No vale
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={e => { e.stopPropagation(); applyMove(m); }}
+                                                                className="focus-ring text-accent-soft hover:text-white font-semibold"
+                                                            >
+                                                                <i className="fa-solid fa-check mr-1" />Aplicar
+                                                            </button>
+                                                        </span>
                                                     )}
                                                 </div>
                                             </div>
@@ -260,6 +275,43 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                         </>
                     )}
                 </div>
+
+                {/* Palabras vetadas */}
+                {blockedWords.length > 0 && (
+                    <div>
+                        <button
+                            type="button"
+                            onClick={() => setShowBlocked(v => !v)}
+                            className="focus-ring text-xs text-brand-subtle/70 hover:text-white transition-colors flex items-center gap-2"
+                        >
+                            <i className={`fa-solid fa-chevron-${showBlocked ? 'down' : 'right'} text-[10px]`} />
+                            <i className="fa-solid fa-ban" />
+                            {blockedWords.length} {blockedWords.length === 1 ? 'palabra vetada' : 'palabras vetadas'}
+                        </button>
+                        {showBlocked && (
+                            <div className="surface-inset rounded-2xl p-3 mt-2">
+                                <p className="text-[11px] text-brand-subtle/60 mb-2.5 leading-relaxed">
+                                    No se sugieren ni como palabra principal ni como cruzada.
+                                    Toca una para volver a permitirla.
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {blockedWords.map(word => (
+                                        <button
+                                            key={word}
+                                            type="button"
+                                            onClick={() => onUnblockWord(word)}
+                                            className="focus-ring tile rounded-lg px-2.5 py-1 text-[11px] font-mono uppercase text-brand-subtle hover:text-emerald-300 transition-colors group"
+                                            title={`Volver a permitir ${word.toUpperCase()}`}
+                                        >
+                                            {word}
+                                            <i className="fa-solid fa-rotate-left ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
         </>

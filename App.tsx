@@ -8,9 +8,11 @@ import GameSwitcher from './components/GameSwitcher';
 import { FoundWord, SearchMode, BoardSlot, BoardMove, BoardState } from './types';
 import { emptyBoard } from './services/boardLayout';
 import {
-    Game, createGame, deleteGame, initGames, nextGameName, saveGame,
+    Game, createGame, deleteGame, initGames, listGames, nextGameName, saveGame,
     getActiveId, setActiveId as persistActiveId,
 } from './services/gamesStore';
+import { blockWord, loadBlocked, unblockWord } from './services/wordBlocklist';
+import { downloadBackup, restoreBackup } from './services/backup';
 
 const slotsToPattern = (slots: BoardSlot[]): string =>
     slots.length === 0 ? '' : slots.map(s => s.letter || '?').join('');
@@ -51,6 +53,7 @@ const App: React.FC = () => {
     const [boardTotal, setBoardTotal] = useState(0);
     const [boardLoading, setBoardLoading] = useState(false);
     const [boardSearched, setBoardSearched] = useState(false);
+    const [blockedWords, setBlockedWords] = useState<string[]>(loadBlocked);
 
     const workerRef = useRef<Worker | null>(null);
 
@@ -96,12 +99,14 @@ const App: React.FC = () => {
         setSearchMode(isParallel ? 'parallel' : letters && pattern ? 'combined' : pattern ? 'pattern' : 'anagram');
         workerRef.current?.postMessage({
             type: 'solve',
-            payload: { letters, pattern, blanks, parallelMode: isParallel },
+            payload: { letters, pattern, blanks, parallelMode: isParallel, blocked: blockedWords },
         });
-    }, [rackLetters, boardSlots, blanks, parallelMode]);
+    }, [rackLetters, boardSlots, blanks, parallelMode, blockedWords]);
 
     // --- Búsqueda de mejor jugada en el tablero ---
-    const handleSolveBoard = useCallback(() => {
+    // La lista de vetadas se pasa explícitamente para poder relanzar la
+    // búsqueda con la lista recién cambiada, sin esperar al re-render.
+    const runBoardSearch = useCallback((blocked: string[]) => {
         if (!boardRack.trim() && boardBlanks === 0) return;
         setBoardLoading(true);
         setBoardSearched(true);
@@ -113,9 +118,29 @@ const App: React.FC = () => {
                 rack: boardRack,
                 blanks: boardBlanks,
                 limit: 120,
+                blocked,
             },
         });
     }, [board, boardRack, boardBlanks]);
+
+    const handleSolveBoard = useCallback(
+        () => runBoardSearch(blockedWords),
+        [runBoardSearch, blockedWords],
+    );
+
+    const handleBlockWord = useCallback((word: string) => {
+        const next = blockWord(word);
+        setBlockedWords(next);
+        showToast(`${word.toUpperCase()} vetada: no volverá a sugerirse`);
+        if (boardSearched) runBoardSearch(next);
+    }, [boardSearched, runBoardSearch]);
+
+    const handleUnblockWord = useCallback((word: string) => {
+        const next = unblockWord(word);
+        setBlockedWords(next);
+        showToast(`${word.toUpperCase()} vuelve a estar permitida`);
+        if (boardSearched) runBoardSearch(next);
+    }, [boardSearched, runBoardSearch]);
 
     // --- Carga inicial de partidas (migra el tablero único de la versión previa) ---
     useEffect(() => {
@@ -181,6 +206,38 @@ const App: React.FC = () => {
         setBoardBlanks(game.blanks);
         showToast(`${game.name} creada`);
     }, [games]);
+
+    const handleExportGames = useCallback(async () => {
+        try {
+            const filename = await downloadBackup();
+            showToast(`Copia descargada: ${filename}`);
+        } catch {
+            showToast('No se pudo generar la copia');
+        }
+    }, []);
+
+    const handleImportGames = useCallback(async (file: File) => {
+        try {
+            const summary = await restoreBackup(await file.text());
+            const reloaded = await listGames();
+            setGames(reloaded);
+            // La copia puede traer palabras vetadas: hay que releerlas o la
+            // siguiente búsqueda seguiría usando la lista anterior.
+            setBlockedWords(loadBlocked());
+            const partes = [
+                `${summary.games} ${summary.games === 1 ? 'partida' : 'partidas'}`,
+                summary.blocked > 0 ? `${summary.blocked} vetadas` : '',
+                summary.glyphs > 0 ? `${summary.glyphs} plantillas` : '',
+            ].filter(Boolean);
+            showToast(
+                summary.games === 0 && summary.blocked === 0 && summary.glyphs === 0
+                    ? 'La copia no traía nada nuevo'
+                    : `Restaurado: ${partes.join(' · ')}`,
+            );
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'No se pudo leer la copia');
+        }
+    }, []);
 
     const handleRenameGame = useCallback((id: string, name: string) => {
         setGames(prev => prev.map(g => {
@@ -272,6 +329,8 @@ const App: React.FC = () => {
                                     onCreate={handleCreateGame}
                                     onRename={handleRenameGame}
                                     onDelete={handleDeleteGame}
+                                    onExport={handleExportGames}
+                                    onImport={handleImportGames}
                                 />
                             )}
                             <BoardPanel
@@ -289,6 +348,9 @@ const App: React.FC = () => {
                                 onBlanksChange={setBoardBlanks}
                                 onSolve={handleSolveBoard}
                                 onShowToast={showToast}
+                                blockedWords={blockedWords}
+                                onBlockWord={handleBlockWord}
+                                onUnblockWord={handleUnblockWord}
                             />
                         </div>
                     </section>

@@ -23,7 +23,6 @@ interface BoardPanelProps {
     ranking: MoveRanking;
     onRankingChange: (r: MoveRanking) => void;
     blockedWords: string[];
-    twoLetterWords: string[];
     onBlockWord: (word: string) => void;
     onUnblockWord: (word: string) => void;
 }
@@ -36,15 +35,12 @@ const moveLabel = (m: BoardMove) =>
 const BoardPanel: React.FC<BoardPanelProps> = ({
     board, rack, blanks, moves, totalMoves, isLoading, isWorkerReady, loadError,
     hasSearched, onBoardChange, onRackChange, onBlanksChange, onSolve, onShowToast,
-    ranking, onRankingChange, blockedWords, twoLetterWords, onBlockWord, onUnblockWord,
+    ranking, onRankingChange, blockedWords, onBlockWord, onUnblockWord,
 }) => {
     const [selected, setSelected] = useState<BoardMove | null>(null);
     const [importing, setImporting] = useState(false);
     const [showBlocked, setShowBlocked] = useState(false);
-    const [showTwoLetter, setShowTwoLetter] = useState(false);
     const [blockDraft, setBlockDraft] = useState('');
-
-    const blockedSet = useMemo(() => new Set(blockedWords), [blockedWords]);
 
     const submitBlocked = useCallback(() => {
         const word = blockDraft.trim();
@@ -389,49 +385,6 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                                 </div>
                             )}
 
-                            {/* Repaso de las de dos letras: nunca salen como jugada
-                                principal, así que solo se pueden vetar desde aquí. */}
-                            {twoLetterWords.length > 0 && (
-                                <div className="border-t border-white/[.06] pt-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowTwoLetter(v => !v)}
-                                        className="focus-ring text-[11px] text-brand-subtle/80 hover:text-white transition-colors flex items-center gap-2"
-                                    >
-                                        <i className={`fa-solid fa-chevron-${showTwoLetter ? 'down' : 'right'} text-[9px]`} />
-                                        Repasar las {twoLetterWords.length} palabras de dos letras
-                                    </button>
-                                    {showTwoLetter && (
-                                        <>
-                                            <p className="text-[11px] text-brand-subtle/60 my-2 leading-relaxed">
-                                                Son las que más cruzadas generan y nunca aparecen como
-                                                jugada, así que este es el único sitio donde puedes
-                                                quitarlas. Toca las que tu juego no acepte.
-                                            </p>
-                                            <div className="flex flex-wrap gap-1 max-h-52 overflow-y-auto">
-                                                {twoLetterWords.map(word => {
-                                                    const vetada = blockedSet.has(word);
-                                                    return (
-                                                        <button
-                                                            key={word}
-                                                            type="button"
-                                                            onClick={() => (vetada ? onUnblockWord(word) : onBlockWord(word))}
-                                                            className={`focus-ring rounded-md px-2 py-1 text-[11px] font-mono uppercase transition-colors ${
-                                                                vetada
-                                                                    ? 'bg-red-500/15 text-red-300/70 line-through'
-                                                                    : 'tile text-brand-subtle hover:text-white'
-                                                            }`}
-                                                            title={vetada ? `Volver a permitir ${word.toUpperCase()}` : `Vetar ${word.toUpperCase()}`}
-                                                        >
-                                                            {word}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            )}
                         </div>
                     )}
                 </div>

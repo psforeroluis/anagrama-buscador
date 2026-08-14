@@ -85,18 +85,7 @@ const rapida=vm.runInContext(`(() => {
 check('camino rápido = generación completa', completa.data[0].score===rapida,
       `${completa.data[0].score} vs ${rapida}`);
 
-// 6c. vocabulario de dos letras y consulta al diccionario
-const voc=send({type:'boardVocabulary'});
-check('vocabulario: solo palabras de dos letras',
-      voc.twoLetter.length>0 && voc.twoLetter.every(w=>w.length===2 && !/[kw]/.test(w)),
-      `${voc.twoLetter.length} palabras`);
-check('vocabulario: incluye AM', voc.twoLetter.includes('am'));
-// Ordenado en español: la Ñ va detrás de la N, no al final como por códigos.
-check('vocabulario: ordenado en español y sin repetidos',
-      new Set(voc.twoLetter).size===voc.twoLetter.length
-      && voc.twoLetter.every((w,i)=>i===0||voc.twoLetter[i-1].localeCompare(w,'es')<=0),
-      voc.twoLetter.slice(voc.twoLetter.indexOf('na'), voc.twoLetter.indexOf('na')+6).join(' '));
-
+// 6c. consulta al diccionario, para avisar si vetas algo que no existe
 check('checkWord reconoce una palabra real', send({type:'checkWord',payload:{word:'casa'}}).known);
 check('checkWord rechaza un invento', !send({type:'checkWord',payload:{word:'xqzpl'}}).known);
 check('checkWord rechaza una sola letra', !send({type:'checkWord',payload:{word:'a'}}).known);

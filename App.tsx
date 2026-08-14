@@ -21,7 +21,6 @@ type WorkerMessage =
     | { type: 'ready'; size: number }
     | { type: 'result'; data: FoundWord[] }
     | { type: 'boardResult'; data: BoardMove[]; total: number }
-    | { type: 'boardVocabulary'; twoLetter: string[] }
     | { type: 'checkWord'; word: string; known: boolean };
 
 type Tab = 'buscador' | 'tablero';
@@ -58,7 +57,6 @@ const App: React.FC = () => {
     const [boardSearched, setBoardSearched] = useState(false);
     const [blockedWords, setBlockedWords] = useState<string[]>(loadBlocked);
     const [ranking, setRanking] = useState<MoveRanking>('equity');
-    const [twoLetterWords, setTwoLetterWords] = useState<string[]>([]);
 
     const toastTimerRef = useRef<number | null>(null);
     const closeToast = useCallback(() => {
@@ -95,7 +93,6 @@ const App: React.FC = () => {
                 worker.onmessage = (e: MessageEvent<WorkerMessage>) => {
                     if (e.data.type === 'ready') setIsWorkerReady(true);
                     else if (e.data.type === 'result') { setFoundWords(e.data.data); setIsLoading(false); }
-                    else if (e.data.type === 'boardVocabulary') setTwoLetterWords(e.data.twoLetter);
                     else if (e.data.type === 'checkWord') {
                         // Vetar algo que el diccionario no tiene no cambia nada;
                         // más vale decirlo que dejar creer que se ha hecho algo.
@@ -340,7 +337,6 @@ const App: React.FC = () => {
         if (tab !== 'tablero' || !isWorkerReady || warmedRef.current) return;
         warmedRef.current = true;
         workerRef.current?.postMessage({ type: 'warmupBoard' });
-        workerRef.current?.postMessage({ type: 'boardVocabulary' });
     }, [tab, isWorkerReady]);
 
     // Cualquier cambio invalida las jugadas ya calculadas.
@@ -412,7 +408,6 @@ const App: React.FC = () => {
                                 ranking={ranking}
                                 onRankingChange={handleRankingChange}
                                 blockedWords={blockedWords}
-                                twoLetterWords={twoLetterWords}
                                 onBlockWord={handleBlockWord}
                                 onUnblockWord={handleUnblockWord}
                             />

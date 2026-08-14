@@ -1063,6 +1063,35 @@ self.onmessage = (event) => {
             }
             self.postMessage({ type: 'ready', size: wordData.length });
 
+        } else if (type === 'boardVocabulary') {
+            // Las de dos letras son las que más cruzadas generan y nunca salen
+            // como jugada principal, así que hay que poder repasarlas a mano.
+            if (wordData.length === 0) throw new Error('Dictionary not loaded yet.');
+            ensureDawg();
+            const dos = [];
+            for (const { word } of wordData) {
+                const norm = normalizeAccents(word);
+                if (norm.length === 2 && !/[kw]/.test(norm)) dos.push(norm);
+            }
+            self.postMessage({
+                type: 'boardVocabulary',
+                twoLetter: Array.from(new Set(dos)).sort((a, b) => a.localeCompare(b, 'es')),
+            });
+
+        } else if (type === 'checkWord') {
+            if (wordData.length === 0) throw new Error('Dictionary not loaded yet.');
+            ensureDawg();
+            const word = normalizeAccents(String(payload?.word || '').toLowerCase());
+            let node = 0;
+            let known = word.length >= 2;
+            for (const ch of word) {
+                const li = LETTER_INDEX[ch];
+                if (li === undefined) { known = false; break; }
+                node = dawgEdge(node, li);
+                if (node < 0) { known = false; break; }
+            }
+            self.postMessage({ type: 'checkWord', word, known: known && !!dawg.final[node] });
+
         } else if (type === 'warmupBoard') {
             // La UI lo pide al abrir la pestaña de tablero para que el primer
             // cálculo no pague la construcción del DAWG.

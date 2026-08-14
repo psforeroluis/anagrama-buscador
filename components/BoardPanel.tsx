@@ -23,6 +23,7 @@ interface BoardPanelProps {
     ranking: MoveRanking;
     onRankingChange: (r: MoveRanking) => void;
     blockedWords: string[];
+    twoLetterWords: string[];
     onBlockWord: (word: string) => void;
     onUnblockWord: (word: string) => void;
 }
@@ -35,11 +36,22 @@ const moveLabel = (m: BoardMove) =>
 const BoardPanel: React.FC<BoardPanelProps> = ({
     board, rack, blanks, moves, totalMoves, isLoading, isWorkerReady, loadError,
     hasSearched, onBoardChange, onRackChange, onBlanksChange, onSolve, onShowToast,
-    ranking, onRankingChange, blockedWords, onBlockWord, onUnblockWord,
+    ranking, onRankingChange, blockedWords, twoLetterWords, onBlockWord, onUnblockWord,
 }) => {
     const [selected, setSelected] = useState<BoardMove | null>(null);
     const [importing, setImporting] = useState(false);
     const [showBlocked, setShowBlocked] = useState(false);
+    const [showTwoLetter, setShowTwoLetter] = useState(false);
+    const [blockDraft, setBlockDraft] = useState('');
+
+    const blockedSet = useMemo(() => new Set(blockedWords), [blockedWords]);
+
+    const submitBlocked = useCallback(() => {
+        const word = blockDraft.trim();
+        if (word.length < 2) return;
+        onBlockWord(word);
+        setBlockDraft('');
+    }, [blockDraft, onBlockWord]);
 
     const tilesOnBoard = useMemo(() => countTiles(board.letters), [board.letters]);
     const rackCount = rack.trim().length + blanks;
@@ -314,30 +326,60 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                 </div>
 
                 {/* Palabras vetadas */}
-                {blockedWords.length > 0 && (
-                    <div>
-                        <button
-                            type="button"
-                            onClick={() => setShowBlocked(v => !v)}
-                            className="focus-ring text-xs text-brand-subtle/70 hover:text-white transition-colors flex items-center gap-2"
-                        >
-                            <i className={`fa-solid fa-chevron-${showBlocked ? 'down' : 'right'} text-[10px]`} />
-                            <i className="fa-solid fa-ban" />
-                            {blockedWords.length} {blockedWords.length === 1 ? 'palabra vetada' : 'palabras vetadas'}
-                        </button>
-                        {showBlocked && (
-                            <div className="surface-inset rounded-2xl p-3 mt-2">
-                                <p className="text-[11px] text-brand-subtle/60 mb-2.5 leading-relaxed">
-                                    No se sugieren ni como palabra principal ni como cruzada.
-                                    Toca una para volver a permitirla.
-                                </p>
-                                <div className="flex flex-wrap gap-1.5">
+                <div>
+                    <button
+                        type="button"
+                        onClick={() => setShowBlocked(v => !v)}
+                        className="focus-ring text-xs text-brand-subtle/70 hover:text-white transition-colors flex items-center gap-2"
+                    >
+                        <i className={`fa-solid fa-chevron-${showBlocked ? 'down' : 'right'} text-[10px]`} />
+                        <i className="fa-solid fa-ban" />
+                        Palabras vetadas
+                        {blockedWords.length > 0 && (
+                            <span className="bg-red-500/15 text-red-200/90 rounded-md px-1.5 py-0.5 font-semibold">
+                                {blockedWords.length}
+                            </span>
+                        )}
+                    </button>
+
+                    {showBlocked && (
+                        <div className="surface-inset rounded-2xl p-3 mt-2">
+                            <p className="text-[11px] text-brand-subtle/60 mb-2.5 leading-relaxed">
+                                Una palabra vetada no se sugiere ni como jugada ni como cruzada.
+                            </p>
+
+                            <form
+                                onSubmit={e => { e.preventDefault(); submitBlocked(); }}
+                                className="flex gap-2 mb-3"
+                            >
+                                <input
+                                    type="text"
+                                    value={blockDraft}
+                                    onChange={e => setBlockDraft(e.target.value)}
+                                    placeholder="Escribe una palabra…"
+                                    autoCapitalize="none"
+                                    autoCorrect="off"
+                                    spellCheck={false}
+                                    aria-label="Vetar una palabra a mano"
+                                    className="flex-1 min-w-0 px-3 py-2 surface-inset rounded-xl text-sm font-mono uppercase text-white placeholder:normal-case placeholder:font-sans placeholder-brand-subtle/40 focus:outline-none focus:ring-2 focus:ring-accent/20 transition-all"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={blockDraft.trim().length < 2}
+                                    className="focus-ring px-3.5 py-2 rounded-xl bg-red-500/15 text-red-200 text-xs font-semibold hover:bg-red-500/25 transition-colors disabled:opacity-40"
+                                >
+                                    <i className="fa-solid fa-ban mr-1.5" />Vetar
+                                </button>
+                            </form>
+
+                            {blockedWords.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mb-3">
                                     {blockedWords.map(word => (
                                         <button
                                             key={word}
                                             type="button"
                                             onClick={() => onUnblockWord(word)}
-                                            className="focus-ring tile rounded-lg px-2.5 py-1 text-[11px] font-mono uppercase text-brand-subtle hover:text-emerald-300 transition-colors group"
+                                            className="focus-ring rounded-lg px-2.5 py-1 text-[11px] font-mono uppercase bg-red-500/10 text-red-200/90 hover:bg-emerald-500/15 hover:text-emerald-300 transition-colors group"
                                             title={`Volver a permitir ${word.toUpperCase()}`}
                                         >
                                             {word}
@@ -345,10 +387,54 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                                         </button>
                                     ))}
                                 </div>
-                            </div>
-                        )}
-                    </div>
-                )}
+                            )}
+
+                            {/* Repaso de las de dos letras: nunca salen como jugada
+                                principal, así que solo se pueden vetar desde aquí. */}
+                            {twoLetterWords.length > 0 && (
+                                <div className="border-t border-white/[.06] pt-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowTwoLetter(v => !v)}
+                                        className="focus-ring text-[11px] text-brand-subtle/80 hover:text-white transition-colors flex items-center gap-2"
+                                    >
+                                        <i className={`fa-solid fa-chevron-${showTwoLetter ? 'down' : 'right'} text-[9px]`} />
+                                        Repasar las {twoLetterWords.length} palabras de dos letras
+                                    </button>
+                                    {showTwoLetter && (
+                                        <>
+                                            <p className="text-[11px] text-brand-subtle/60 my-2 leading-relaxed">
+                                                Son las que más cruzadas generan y nunca aparecen como
+                                                jugada, así que este es el único sitio donde puedes
+                                                quitarlas. Toca las que tu juego no acepte.
+                                            </p>
+                                            <div className="flex flex-wrap gap-1 max-h-52 overflow-y-auto">
+                                                {twoLetterWords.map(word => {
+                                                    const vetada = blockedSet.has(word);
+                                                    return (
+                                                        <button
+                                                            key={word}
+                                                            type="button"
+                                                            onClick={() => (vetada ? onUnblockWord(word) : onBlockWord(word))}
+                                                            className={`focus-ring rounded-md px-2 py-1 text-[11px] font-mono uppercase transition-colors ${
+                                                                vetada
+                                                                    ? 'bg-red-500/15 text-red-300/70 line-through'
+                                                                    : 'tile text-brand-subtle hover:text-white'
+                                                            }`}
+                                                            title={vetada ? `Volver a permitir ${word.toUpperCase()}` : `Vetar ${word.toUpperCase()}`}
+                                                        >
+                                                            {word}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
         </>

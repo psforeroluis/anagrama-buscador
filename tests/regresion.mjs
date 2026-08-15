@@ -106,5 +106,9 @@ check('atril vacío devuelve forma válida', Array.isArray(r.data)&&r.total===0)
 const an=send({type:'solve',payload:{letters:'casa',pattern:'',blanks:0}});
 check('buscador de anagramas', an.data.some(w=>w.word==='casa'), `${an.data.length} palabras`);
 
+// La UI usa el identificador para ignorar respuestas de búsquedas anteriores.
+const identificada=send({type:'solve',requestId:42,payload:{letters:'casa',pattern:'',blanks:0}});
+check('la respuesta conserva el identificador de petición', identificada.requestId===42);
+
 console.log(fallos===0 ? '\nTODO CORRECTO' : `\n${fallos} FALLOS`);
 process.exit(fallos?1:0);

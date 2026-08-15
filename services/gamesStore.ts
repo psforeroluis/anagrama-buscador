@@ -35,9 +35,11 @@ export const createGame = (name: string): Game => ({
     updatedAt: Date.now(),
 });
 
-const isValidGame = (g: unknown): g is Game => {
+export const isValidGame = (g: unknown): g is Game => {
     const x = g as Game;
     return !!x && typeof x.id === 'string' && typeof x.name === 'string'
+        && typeof x.rack === 'string' && Number.isInteger(x.blanks) && x.blanks >= 0 && x.blanks <= 2
+        && Number.isFinite(x.createdAt) && Number.isFinite(x.updatedAt)
         && !!x.board && Array.isArray(x.board.letters) && Array.isArray(x.board.blanks)
         && x.board.letters.length === BOARD_SIZE && x.board.blanks.length === BOARD_SIZE
         && x.board.letters.every(r => typeof r === 'string' && r.length === BOARD_SIZE)
@@ -69,8 +71,12 @@ const tx = async <T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => I
     return new Promise<T>((resolve, reject) => {
         const t = db.transaction(STORE, mode);
         const req = run(t.objectStore(STORE));
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+        let result: T;
+        req.onsuccess = () => { result = req.result; };
+        req.onerror = () => reject(req.error ?? new Error('falló la operación de IndexedDB'));
+        t.oncomplete = () => resolve(result);
+        t.onerror = () => reject(t.error ?? new Error('falló la transacción de IndexedDB'));
+        t.onabort = () => reject(t.error ?? new Error('se canceló la transacción de IndexedDB'));
     });
 };
 

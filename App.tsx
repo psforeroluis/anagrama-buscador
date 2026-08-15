@@ -376,11 +376,11 @@ const App: React.FC = () => {
                 <div className="absolute top-[35%] -right-[10%] w-[40vw] h-[40vw] rounded-full bg-aqua/10 blur-[140px] animate-float" style={{ animationDelay: '-7s' }}></div>
             </div>
 
-            <div className="w-full max-w-5xl mx-auto z-10 flex flex-col min-h-screen">
+            <div className="w-full max-w-6xl mx-auto z-10 flex flex-col min-h-screen">
                 <Header />
 
                 <main className="flex-grow">
-                    <div className="flex gap-1.5 mb-4 surface-inset rounded-2xl p-1.5 w-full sm:w-auto sm:inline-flex">
+                    <div className="workspace-nav flex gap-1.5 mb-5 surface-inset rounded-2xl p-1.5 w-full sm:w-auto sm:inline-flex">
                         {([['buscador', 'fa-magnifying-glass', 'Buscador'], ['tablero', 'fa-table-cells-large', 'Tablero']] as const).map(([id, icon, label]) => (
                             <button
                                 key={id}
@@ -395,7 +395,7 @@ const App: React.FC = () => {
                         ))}
                     </div>
 
-                    <section className={`surface edge-light rounded-4xl shadow-[0_24px_70px_-30px_rgba(0,0,0,.9)] overflow-hidden animate-rise ${tab === 'tablero' ? '' : 'hidden'}`}>
+                    <section aria-label="Panel de tablero" className={`surface edge-light rounded-4xl shadow-[0_24px_70px_-30px_rgba(0,0,0,.9)] overflow-hidden animate-rise ${tab === 'tablero' ? '' : 'hidden'}`}>
                         <div className="p-4 sm:p-6">
                             {games.length > 0 && (
                                 <GameSwitcher
@@ -433,8 +433,18 @@ const App: React.FC = () => {
                         </div>
                     </section>
 
-                    <section className={`surface edge-light rounded-4xl shadow-[0_24px_70px_-30px_rgba(0,0,0,.9)] overflow-hidden animate-rise ${tab === 'buscador' ? '' : 'hidden'}`}>
+                    <section aria-label="Buscador de palabras" className={`surface edge-light rounded-4xl shadow-[0_24px_70px_-30px_rgba(0,0,0,.9)] overflow-hidden animate-rise ${tab === 'buscador' ? '' : 'hidden'}`}>
                         <div className="p-5 sm:p-7">
+                            <div className="search-intro flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-5 mb-6 border-b border-white/[.07]">
+                                <div>
+                                    <p className="text-[11px] font-semibold uppercase tracking-[.14em] text-accent-soft">Resuelve tu turno</p>
+                                    <h2 className="text-xl font-bold tracking-tight text-brand-text mt-1">Encuentra palabras en segundos</h2>
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-brand-subtle">
+                                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-aqua/10 text-aqua"><i className="fa-solid fa-bolt" /></span>
+                                    <span>Resultados ordenados por puntos</span>
+                                </div>
+                            </div>
                             <WordInput
                                 rackLetters={rackLetters}
                                 blanks={blanks}
@@ -466,8 +476,8 @@ const App: React.FC = () => {
                     </div>
                 </main>
 
-                <footer className="w-full text-center py-10 mt-10 text-xs text-brand-subtle/60">
-                    <p>Hecho con React, TypeScript y Tailwind CSS.</p>
+                <footer className="w-full text-center py-8 mt-8 text-xs text-brand-subtle/55">
+                    <p>Tu tablero y tus partidas se guardan en este dispositivo.</p>
                 </footer>
             </div>
 

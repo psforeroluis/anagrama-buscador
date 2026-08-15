@@ -58,10 +58,10 @@ const WordInput: React.FC<WordInputProps> = ({
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-7">
                 {/* Row 1: Rack + Board */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="group">
+                    <div className="group rounded-3xl p-1 sm:p-2 transition-colors hover:bg-white/[.015]">
                         <label htmlFor="rack-input" className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-subtle mb-2.5 ml-0.5 group-focus-within:text-accent-soft transition-colors">
                             <i className="fa-solid fa-cubes-stacked mr-2"></i>
                             Tus fichas del maletín
@@ -72,7 +72,7 @@ const WordInput: React.FC<WordInputProps> = ({
                                 type="text"
                                 value={rackLetters}
                                 onChange={e => onRackChange(e.target.value)}
-                                placeholder="ej: rstaeil"
+                                placeholder="Ej.: R S T A E I L"
                                 className="w-full px-5 py-4 surface-inset rounded-2xl focus:outline-none focus:border-accent/60 focus:ring-4 focus:ring-accent/15 transition-all duration-200 text-2xl font-mono font-bold placeholder:text-lg placeholder:font-sans placeholder:font-normal placeholder:tracking-normal placeholder:normal-case placeholder-brand-subtle/40 text-white disabled:opacity-40 uppercase tracking-[0.28em]"
                                 disabled={isDisabled}
                                 aria-label="Tus fichas del maletín"
@@ -116,7 +116,7 @@ const WordInput: React.FC<WordInputProps> = ({
                     </div>
 
                     {/* Board context column */}
-                    <div>
+                    <div className="rounded-3xl p-1 sm:p-2 transition-colors hover:bg-white/[.015]">
                         <div className="flex items-center justify-between mb-2.5 ml-0.5">
                             <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-subtle">
                                 <i className="fa-solid fa-table-cells mr-2"></i>
@@ -182,7 +182,7 @@ const WordInput: React.FC<WordInputProps> = ({
                 </div>
 
                 {/* Buttons */}
-                <div className="flex flex-col sm:flex-row-reverse gap-3">
+                <div className="flex flex-col sm:flex-row-reverse gap-3 pt-1">
                     <button
                         type="submit"
                         className="focus-ring w-full sm:w-2/3 px-8 py-4 rounded-2xl bg-gradient-to-r from-accent-deep via-accent to-aqua text-white font-bold tracking-tight hover:shadow-[0_18px_44px_-18px_rgba(124,58,237,.95)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex items-center justify-center text-base"

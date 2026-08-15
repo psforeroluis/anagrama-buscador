@@ -1,5 +1,6 @@
 :root {
     color-scheme: dark;
+    font-synthesis: none;
 }
 
 html {
@@ -14,6 +15,7 @@ body {
         radial-gradient(ellipse 90% 60% at 50% 110%, rgba(167, 139, 250, .10), transparent 60%);
     background-attachment: fixed;
     letter-spacing: -0.011em;
+    min-width: 320px;
 }
 
 /* Fine grain so the flat dark surface doesn't band */
@@ -50,8 +52,8 @@ body::before {
 
 /* Glass surface used by cards and panels */
 .surface {
-    background: linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .015));
-    border: 1px solid rgba(255, 255, 255, .07);
+    background: linear-gradient(145deg, rgba(255, 255, 255, .065), rgba(255, 255, 255, .018));
+    border: 1px solid rgba(255, 255, 255, .09);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
 }
@@ -64,8 +66,30 @@ body::before {
 }
 
 .surface-inset {
-    background: rgba(8, 9, 15, .55);
-    border: 1px solid rgba(255, 255, 255, .06);
+    background: rgba(5, 7, 14, .58);
+    border: 1px solid rgba(255, 255, 255, .075);
+}
+
+.workspace-nav {
+    box-shadow: 0 12px 32px -22px rgba(0, 0, 0, .9);
+}
+
+.search-intro {
+    background: linear-gradient(90deg, rgba(124, 58, 237, .07), transparent 58%);
+}
+
+button, input {
+    -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 640px) {
+    .workspace-nav {
+        position: sticky;
+        top: 10px;
+        z-index: 20;
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+    }
 }
 
 /* Hairline highlight along the top edge of a card */

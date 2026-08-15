@@ -1,20 +1,28 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Anagrama — buscador de palabras
 
-# Run and deploy your AI Studio app
+Aplicación web local para buscar anagramas y patrones, gestionar partidas y
+calcular jugadas sobre un tablero de 15 × 15. El cálculo se realiza en un Web
+Worker y no requiere servicios externos ni claves de API.
 
-This contains everything you need to run your app locally.
+## Desarrollo
 
-View your app in AI Studio: https://ai.studio/apps/3328e9d6-4cfe-4282-9449-b94966d0a43e
+Requiere una versión reciente de Node.js.
 
-## Run Locally
+```bash
+npm install
+npm run dev
+```
 
-**Prerequisites:**  Node.js
+La aplicación queda disponible normalmente en `http://localhost:3000`.
 
+## Comprobaciones
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm test
+npm run build
+npx tsc --noEmit
+```
+
+Las partidas y plantillas aprendidas se guardan en IndexedDB, con
+`localStorage` como respaldo. Desde la propia interfaz se puede descargar e
+importar una copia de seguridad en JSON.

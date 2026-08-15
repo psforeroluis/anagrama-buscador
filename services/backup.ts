@@ -2,10 +2,9 @@
 // las plantillas de letras aprendidas. Sirve para no perder los tableros al
 // cambiar de navegador o de móvil, y antes de tocar nada delicado.
 
-import { Game, listGames, saveGame } from './gamesStore';
+import { Game, isValidGame, listGames, saveGame } from './gamesStore';
 import { loadBlocked, saveBlocked } from './wordBlocklist';
 import { exportTemplates, importTemplates } from './glyphStore';
-import { BOARD_SIZE } from './boardLayout';
 
 const FORMAT = 'anagrama-backup';
 const VERSION = 1;
@@ -25,15 +24,6 @@ export interface ImportSummary {
     blocked: number;
     glyphs: number;
 }
-
-const isGame = (g: unknown): g is Game => {
-    const x = g as Game;
-    return !!x && typeof x.id === 'string' && typeof x.name === 'string'
-        && !!x.board && Array.isArray(x.board.letters) && Array.isArray(x.board.blanks)
-        && x.board.letters.length === BOARD_SIZE && x.board.blanks.length === BOARD_SIZE
-        && x.board.letters.every(r => typeof r === 'string' && r.length === BOARD_SIZE)
-        && x.board.blanks.every(r => typeof r === 'string' && r.length === BOARD_SIZE);
-};
 
 export const buildBackup = async (): Promise<Backup> => ({
     format: FORMAT,
@@ -81,6 +71,9 @@ export const restoreBackup = async (json: string): Promise<ImportSummary> => {
     if (typeof parsed.version !== 'number' || parsed.version > VERSION) {
         throw new Error('La copia es de una versión más nueva de la app.');
     }
+    if (!Array.isArray(parsed.games)) {
+        throw new Error('La copia no contiene una lista de partidas válida.');
+    }
 
     const summary: ImportSummary = { games: 0, gamesRenamed: 0, blocked: 0, glyphs: 0 };
 
@@ -90,7 +83,7 @@ export const restoreBackup = async (json: string): Promise<ImportSummary> => {
     const signature = (g: Game) => g.board.letters.join('') + '|' + g.board.blanks.join('');
 
     for (const game of parsed.games ?? []) {
-        if (!isGame(game)) continue;
+        if (!isValidGame(game)) continue;
 
         const clash = existingById.get(game.id);
         // Mismo id y mismo tablero: es la misma partida, no la duplicamos.

@@ -1011,7 +1011,7 @@ const solveBoard = (board, blanksBoard, rackLetters, blanks, limit, bagSize, ran
 
 // --- Message Handler ---
 self.onmessage = (event) => {
-    const { type, payload, dictionaryText } = event.data;
+    const { type, payload, dictionaryText, requestId } = event.data;
 
     try {
         if (type === 'init') {
@@ -1093,6 +1093,7 @@ self.onmessage = (event) => {
             const result = solveBoard(board, blanksBoard, rack, blanks, limit, bagSize, rankBy, samples);
             self.postMessage({
                 type: 'boardResult',
+                requestId,
                 data: result.moves,
                 total: result.total,
                 leaveWeight: result.leaveWeight,
@@ -1104,10 +1105,15 @@ self.onmessage = (event) => {
             const { letters, pattern, blanks = 0, parallelMode = false, blocked = [] } = payload;
             blockedWords = new Set(blocked);
             const results = solve(letters, pattern, blanks, parallelMode);
-            self.postMessage({ type: 'result', data: results });
+            self.postMessage({ type: 'result', data: results, requestId });
         }
     } catch (e) {
         console.error('Error in worker:', e);
-        self.postMessage({ type: type === 'solveBoard' ? 'boardResult' : 'result', data: [], total: 0 });
+        self.postMessage({
+            type: type === 'solveBoard' ? 'boardResult' : 'result',
+            data: [],
+            total: 0,
+            requestId,
+        });
     }
 };

@@ -19,8 +19,8 @@ const slotsToPattern = (slots: BoardSlot[]): string =>
 
 type WorkerMessage =
     | { type: 'ready'; size: number }
-    | { type: 'result'; data: FoundWord[] }
-    | { type: 'boardResult'; data: BoardMove[]; total: number }
+    | { type: 'result'; data: FoundWord[]; requestId?: number }
+    | { type: 'boardResult'; data: BoardMove[]; total: number; requestId?: number }
     | { type: 'checkWord'; word: string; known: boolean };
 
 type Tab = 'buscador' | 'tablero';
@@ -77,6 +77,8 @@ const App: React.FC = () => {
     }, []);
 
     const workerRef = useRef<Worker | null>(null);
+    const searchRequestRef = useRef(0);
+    const boardRequestRef = useRef(0);
 
     // --- Web Worker ---
     useEffect(() => {
@@ -92,7 +94,11 @@ const App: React.FC = () => {
                 workerRef.current = worker;
                 worker.onmessage = (e: MessageEvent<WorkerMessage>) => {
                     if (e.data.type === 'ready') setIsWorkerReady(true);
-                    else if (e.data.type === 'result') { setFoundWords(e.data.data); setIsLoading(false); }
+                    else if (e.data.type === 'result') {
+                        if (e.data.requestId !== searchRequestRef.current) return;
+                        setFoundWords(e.data.data);
+                        setIsLoading(false);
+                    }
                     else if (e.data.type === 'checkWord') {
                         // Vetar algo que el diccionario no tiene no cambia nada;
                         // más vale decirlo que dejar creer que se ha hecho algo.
@@ -101,6 +107,7 @@ const App: React.FC = () => {
                         }
                     }
                     else if (e.data.type === 'boardResult') {
+                        if (e.data.requestId !== boardRequestRef.current) return;
                         setBoardMoves(e.data.data);
                         setBoardTotal(e.data.total ?? e.data.data.length);
                         setBoardLoading(false);
@@ -124,9 +131,11 @@ const App: React.FC = () => {
         setActiveLettersQuery(letters);
         setActivePatternQuery(pattern);
         const isParallel = parallelMode && pattern.length > 0;
+        const requestId = ++searchRequestRef.current;
         setSearchMode(isParallel ? 'parallel' : letters && pattern ? 'combined' : pattern ? 'pattern' : 'anagram');
         workerRef.current?.postMessage({
             type: 'solve',
+            requestId,
             payload: { letters, pattern, blanks, parallelMode: isParallel, blocked: blockedWords },
         });
     }, [rackLetters, boardSlots, blanks, parallelMode, blockedWords]);
@@ -141,8 +150,10 @@ const App: React.FC = () => {
         // Lo que queda en la bolsa: lo que no has visto, menos el atril del
         // rival. Con la bolsa vacía ya no robas, así que el deje deja de contar.
         const { unseen } = censusTiles(board.letters, board.blanks, boardRack, boardBlanks);
+        const requestId = ++boardRequestRef.current;
         workerRef.current?.postMessage({
             type: 'solveBoard',
+            requestId,
             payload: {
                 board: board.letters,
                 blanksBoard: board.blanks,
@@ -340,9 +351,17 @@ const App: React.FC = () => {
     }, [tab, isWorkerReady]);
 
     // Cualquier cambio invalida las jugadas ya calculadas.
-    useEffect(() => { setBoardMoves([]); setBoardSearched(false); }, [board, boardRack, boardBlanks]);
+    useEffect(() => {
+        // Una respuesta que ya estuviera calculándose pertenece al estado anterior.
+        boardRequestRef.current++;
+        setBoardMoves([]);
+        setBoardSearched(false);
+        setBoardLoading(false);
+    }, [board, boardRack, boardBlanks]);
 
     const handleClear = useCallback(() => {
+        searchRequestRef.current++;
+        setIsLoading(false);
         setFoundWords([]);
         setHasSearched(false);
         setActiveLettersQuery('');

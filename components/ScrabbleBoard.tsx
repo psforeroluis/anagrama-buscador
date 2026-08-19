@@ -16,6 +16,8 @@ const normalize = (ch: string) =>
         .replace(/[áà]/g, 'a').replace(/[éè]/g, 'e').replace(/[íì]/g, 'i')
         .replace(/[óò]/g, 'o').replace(/[úùü]/g, 'u');
 
+const COLUMN_LABELS = 'ABCDEFGHIJKLMNO'.split('');
+
 const ScrabbleBoard: React.FC<ScrabbleBoardProps> = ({ board, onChange, preview, disabled }) => {
     const [cursor, setCursorState] = useState<{ row: number; col: number }>({ row: 7, col: 7 });
     const [dir, setDirState] = useState<'H' | 'V'>('H');
@@ -50,6 +52,11 @@ const ScrabbleBoard: React.FC<ScrabbleBoardProps> = ({ board, onChange, preview,
         for (const t of preview ?? []) map.set(`${t.row}-${t.col}`, t);
         return map;
     }, [preview]);
+
+    const tilesOnBoard = board.letters.reduce(
+        (total, row) => total + [...row].filter(letter => letter !== '.').length,
+        0,
+    );
 
     const advance = useCallback((row: number, col: number, back = false) => {
         const step = back ? -1 : 1;
@@ -163,13 +170,33 @@ const ScrabbleBoard: React.FC<ScrabbleBoardProps> = ({ board, onChange, preview,
                 className="absolute opacity-0 w-px h-px pointer-events-none"
             />
 
-            <div
-                className="grid gap-[2px] select-none touch-manipulation"
-                style={{ gridTemplateColumns: `repeat(${BOARD_SIZE}, minmax(0, 1fr))` }}
-                onClick={() => inputRef.current?.focus()}
-            >
-                {PREMIUM_ROWS.map((prow, row) =>
-                    [...prow].map((prem, col) => {
+            <div className="mt-2 rounded-2xl bg-ink-900/55 border border-white/[.08] p-2 sm:p-3">
+                <div className="flex items-center justify-between gap-3 mb-2 px-1">
+                    <div className="flex items-center gap-2 text-[10px] sm:text-xs font-semibold text-brand-subtle">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-amber-400/15 text-amber-300">
+                            <i className="fa-solid fa-crosshairs text-[9px]" />
+                        </span>
+                        {tilesOnBoard === 0 ? 'Empieza por la casilla central ★' : 'Coordenadas activas'}
+                    </div>
+                    <span className="text-[10px] text-brand-subtle/55 font-mono">A–O · 1–15</span>
+                </div>
+
+                <div className="grid grid-cols-[18px_minmax(0,1fr)] sm:grid-cols-[24px_minmax(0,1fr)] gap-1.5 sm:gap-2 select-none touch-manipulation">
+                    <div aria-hidden="true" />
+                    <div className="grid gap-[2px] px-0.5" style={{ gridTemplateColumns: `repeat(${BOARD_SIZE}, minmax(0, 1fr))` }}>
+                        {COLUMN_LABELS.map(label => <span key={label} className="text-center text-[8px] sm:text-[10px] font-bold text-brand-subtle/70">{label}</span>)}
+                    </div>
+
+                    <div className="grid gap-[2px]" style={{ gridTemplateRows: `repeat(${BOARD_SIZE}, minmax(0, 1fr))` }} aria-hidden="true">
+                        {Array.from({ length: BOARD_SIZE }, (_, i) => <span key={i} className="flex items-center justify-center text-[8px] sm:text-[10px] font-bold text-brand-subtle/70">{i + 1}</span>)}
+                    </div>
+                    <div
+                        className="grid gap-[2px] select-none touch-manipulation"
+                        style={{ gridTemplateColumns: `repeat(${BOARD_SIZE}, minmax(0, 1fr))` }}
+                        onClick={() => inputRef.current?.focus()}
+                    >
+                    {PREMIUM_ROWS.map((prow, row) =>
+                        [...prow].map((prem, col) => {
                         const letter = board.letters[row][col];
                         const isBlank = board.blanks[row][col] === '1';
                         const hasTile = letter !== '.';
@@ -204,7 +231,8 @@ const ScrabbleBoard: React.FC<ScrabbleBoardProps> = ({ board, onChange, preview,
                                 className={`relative aspect-square rounded-[3px] sm:rounded-[4px] flex items-center justify-center
                                     text-[9px] sm:text-xs font-bold leading-none transition-colors ${cls}
                                     ${isCursor && focused ? 'ring-2 ring-accent ring-offset-0 z-10' : ''}
-                                    ${isCursor && !focused ? 'ring-1 ring-accent/50 z-10' : ''}`}
+                                    ${isCursor && !focused ? 'ring-1 ring-accent/50 z-10' : ''}
+                                    ${isCenter && !hasTile ? 'ring-1 ring-amber-300/80 shadow-[0_0_12px_rgba(251,191,36,.32)] z-[1]' : ''}`}
                                 aria-label={`fila ${row + 1} columna ${col + 1}${hasTile ? `, ficha ${letter.toUpperCase()}` : ' vacía'}`}
                             >
                                 {content}
@@ -223,8 +251,10 @@ const ScrabbleBoard: React.FC<ScrabbleBoardProps> = ({ board, onChange, preview,
                                 )}
                             </button>
                         );
-                    })
-                )}
+                        })
+                    )}
+                    </div>
+                </div>
             </div>
 
             <div className="flex items-center gap-3 flex-wrap mt-3 text-[11px] text-brand-subtle/70">

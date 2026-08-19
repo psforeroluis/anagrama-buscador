@@ -1,6 +1,13 @@
 :root {
     color-scheme: dark;
     font-synthesis: none;
+    --app-bg: #080b14;
+    --app-panel: rgba(18, 24, 39, .78);
+    --app-panel-strong: rgba(11, 16, 29, .86);
+    --app-border: rgba(148, 163, 184, .16);
+    --app-accent: #8b5cf6;
+    --app-accent-bright: #a78bfa;
+    --app-cyan: #2dd4bf;
 }
 
 html {
@@ -8,11 +15,11 @@ html {
 }
 
 body {
-    background-color: #08090f;
+    background-color: var(--app-bg);
     background-image:
-        radial-gradient(ellipse 80% 60% at 15% -10%, rgba(124, 58, 237, .20), transparent 60%),
-        radial-gradient(ellipse 70% 50% at 90% 5%, rgba(34, 211, 238, .12), transparent 60%),
-        radial-gradient(ellipse 90% 60% at 50% 110%, rgba(167, 139, 250, .10), transparent 60%);
+        radial-gradient(ellipse 80% 60% at 8% -10%, rgba(124, 58, 237, .24), transparent 60%),
+        radial-gradient(ellipse 70% 50% at 96% 8%, rgba(45, 212, 191, .14), transparent 60%),
+        radial-gradient(ellipse 90% 60% at 50% 110%, rgba(59, 130, 246, .08), transparent 60%);
     background-attachment: fixed;
     letter-spacing: -0.011em;
     min-width: 320px;
@@ -52,8 +59,8 @@ body::before {
 
 /* Glass surface used by cards and panels */
 .surface {
-    background: linear-gradient(145deg, rgba(255, 255, 255, .065), rgba(255, 255, 255, .018));
-    border: 1px solid rgba(255, 255, 255, .09);
+    background: linear-gradient(145deg, rgba(30, 41, 66, .78), rgba(14, 20, 34, .72));
+    border: 1px solid var(--app-border);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
 }
@@ -61,13 +68,13 @@ body::before {
 /* Same look as .surface but without backdrop-filter — for elements repeated
    many times (result cards, chips), where compositing the blur is too costly. */
 .tile {
-    background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .02));
-    border: 1px solid rgba(255, 255, 255, .07);
+    background: linear-gradient(180deg, rgba(40, 52, 80, .58), rgba(18, 25, 42, .58));
+    border: 1px solid rgba(148, 163, 184, .13);
 }
 
 .surface-inset {
-    background: rgba(5, 7, 14, .58);
-    border: 1px solid rgba(255, 255, 255, .075);
+    background: var(--app-panel-strong);
+    border: 1px solid rgba(148, 163, 184, .15);
 }
 
 .workspace-nav {
@@ -75,7 +82,19 @@ body::before {
 }
 
 .search-intro {
-    background: linear-gradient(90deg, rgba(124, 58, 237, .07), transparent 58%);
+    background: linear-gradient(90deg, rgba(139, 92, 246, .14), transparent 62%);
+}
+
+input:focus-visible,
+button:focus-visible {
+    outline: 2px solid rgba(45, 212, 191, .88);
+    outline-offset: 3px;
+}
+
+button:disabled { filter: saturate(.55); }
+
+@media (hover: hover) {
+    .tile:hover { background: linear-gradient(180deg, rgba(51, 65, 96, .72), rgba(22, 31, 52, .72)); }
 }
 
 button, input {

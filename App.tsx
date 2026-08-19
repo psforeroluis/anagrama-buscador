@@ -387,7 +387,7 @@ const App: React.FC = () => {
                                 type="button"
                                 onClick={() => setTab(id)}
                                 className={`focus-ring flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                                    tab === id ? 'bg-accent/15 text-accent-soft shadow-[inset_0_0_0_1px_rgba(167,139,250,.35)]' : 'text-brand-subtle hover:text-white'
+                                    tab === id ? 'bg-accent/25 text-white shadow-[0_8px_24px_-12px_rgba(139,92,246,.9),inset_0_0_0_1px_rgba(167,139,250,.45)]' : 'text-brand-subtle hover:text-white hover:bg-white/[.04]'
                                 }`}
                             >
                                 <i className={`fa-solid ${icon} mr-2`} />{label}
@@ -441,8 +441,8 @@ const App: React.FC = () => {
                                     <h2 className="text-xl font-bold tracking-tight text-brand-text mt-1">Encuentra palabras en segundos</h2>
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-brand-subtle">
-                                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-aqua/10 text-aqua"><i className="fa-solid fa-bolt" /></span>
-                                    <span>Resultados ordenados por puntos</span>
+                                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-400/15 text-emerald-300"><i className="fa-solid fa-bolt" /></span>
+                                    <span>Ordenadas para jugar mejor</span>
                                 </div>
                             </div>
                             <WordInput

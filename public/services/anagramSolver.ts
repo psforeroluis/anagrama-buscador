@@ -1063,6 +1063,25 @@ self.onmessage = (event) => {
             }
             self.postMessage({ type: 'ready', size: wordData.length });
 
+        } else if (type === 'checkWords') {
+            if (wordData.length === 0) throw new Error('Dictionary not loaded yet.');
+            ensureDawg();
+            const words = Array.isArray(payload?.words) ? payload.words : [];
+            const unknown = [];
+            for (const raw of words) {
+                const word = normalizeAccents(String(raw || '').toLowerCase());
+                let node = 0;
+                let known = word.length >= 2;
+                for (const ch of word) {
+                    const li = LETTER_INDEX[ch];
+                    if (li === undefined) { known = false; break; }
+                    node = dawgEdge(node, li);
+                    if (node < 0) { known = false; break; }
+                }
+                if (!known || !dawg.final[node]) unknown.push(word);
+            }
+            self.postMessage({ type: 'checkWords', unknown, requestId });
+
         } else if (type === 'checkWord') {
             if (wordData.length === 0) throw new Error('Dictionary not loaded yet.');
             ensureDawg();

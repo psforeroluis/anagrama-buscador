@@ -12,6 +12,7 @@ import {
     getActiveId, setActiveId as persistActiveId,
 } from './services/gamesStore';
 import { blockWord, loadBlocked, unblockWord } from './services/wordBlocklist';
+import { addCandidates, loadCandidates, removeCandidate } from './services/wordCandidates';
 import { downloadBackup, restoreBackup } from './services/backup';
 
 const slotsToPattern = (slots: BoardSlot[]): string =>
@@ -21,7 +22,8 @@ type WorkerMessage =
     | { type: 'ready'; size: number }
     | { type: 'result'; data: FoundWord[]; requestId?: number }
     | { type: 'boardResult'; data: BoardMove[]; total: number; requestId?: number }
-    | { type: 'checkWord'; word: string; known: boolean };
+    | { type: 'checkWord'; word: string; known: boolean }
+    | { type: 'checkWords'; unknown: string[]; requestId?: number };
 
 type Tab = 'buscador' | 'tablero';
 
@@ -56,6 +58,7 @@ const App: React.FC = () => {
     const [boardLoading, setBoardLoading] = useState(false);
     const [boardSearched, setBoardSearched] = useState(false);
     const [blockedWords, setBlockedWords] = useState<string[]>(loadBlocked);
+    const [candidateWords, setCandidateWords] = useState<string[]>(loadCandidates);
     const [ranking, setRanking] = useState<MoveRanking>('equity');
 
     const toastTimerRef = useRef<number | null>(null);
@@ -79,6 +82,8 @@ const App: React.FC = () => {
     const workerRef = useRef<Worker | null>(null);
     const searchRequestRef = useRef(0);
     const boardRequestRef = useRef(0);
+    const wordCheckRequestRef = useRef(0);
+    const wordCheckResolversRef = useRef(new Map<number, (words: string[]) => void>());
 
     // --- Web Worker ---
     useEffect(() => {
@@ -104,6 +109,15 @@ const App: React.FC = () => {
                         // más vale decirlo que dejar creer que se ha hecho algo.
                         if (!e.data.known) {
                             showToast(`${e.data.word.toUpperCase()} no está en el diccionario: vetarla no cambia nada`);
+                        }
+                    }
+                    else if (e.data.type === 'checkWords') {
+                        const resolve = e.data.requestId === undefined
+                            ? undefined
+                            : wordCheckResolversRef.current.get(e.data.requestId);
+                        if (resolve && e.data.requestId !== undefined) {
+                            wordCheckResolversRef.current.delete(e.data.requestId);
+                            resolve(e.data.unknown);
                         }
                     }
                     else if (e.data.type === 'boardResult') {
@@ -192,6 +206,24 @@ const App: React.FC = () => {
         if (boardSearched) runBoardSearch(next, ranking);
     }, [boardSearched, runBoardSearch, ranking]);
 
+    const handleCollectBoardWords = useCallback((words: string[]): Promise<number> => {
+        if (!workerRef.current || !isWorkerReady || words.length === 0) return Promise.resolve(0);
+        const requestId = ++wordCheckRequestRef.current;
+        return new Promise(resolve => {
+            wordCheckResolversRef.current.set(requestId, unknown => {
+                const before = new Set(loadCandidates());
+                const next = addCandidates(unknown);
+                setCandidateWords(next);
+                resolve(next.filter(word => !before.has(word)).length);
+            });
+            workerRef.current?.postMessage({ type: 'checkWords', requestId, payload: { words } });
+        });
+    }, [isWorkerReady]);
+
+    const handleRemoveCandidate = useCallback((word: string) => {
+        setCandidateWords(removeCandidate(word));
+    }, []);
+
     // --- Carga inicial de partidas (migra el tablero único de la versión previa) ---
     useEffect(() => {
         let cancelled = false;
@@ -274,13 +306,15 @@ const App: React.FC = () => {
             // La copia puede traer palabras vetadas: hay que releerlas o la
             // siguiente búsqueda seguiría usando la lista anterior.
             setBlockedWords(loadBlocked());
+            setCandidateWords(loadCandidates());
             const partes = [
                 `${summary.games} ${summary.games === 1 ? 'partida' : 'partidas'}`,
                 summary.blocked > 0 ? `${summary.blocked} vetadas` : '',
                 summary.glyphs > 0 ? `${summary.glyphs} plantillas` : '',
+                summary.candidates > 0 ? `${summary.candidates} detectadas` : '',
             ].filter(Boolean);
             showToast(
-                summary.games === 0 && summary.blocked === 0 && summary.glyphs === 0
+                summary.games === 0 && summary.blocked === 0 && summary.glyphs === 0 && summary.candidates === 0
                     ? 'La copia no traía nada nuevo'
                     : `Restaurado: ${partes.join(' · ')}`,
             );
@@ -429,6 +463,9 @@ const App: React.FC = () => {
                                 blockedWords={blockedWords}
                                 onBlockWord={handleBlockWord}
                                 onUnblockWord={handleUnblockWord}
+                                candidateWords={candidateWords}
+                                onCollectBoardWords={handleCollectBoardWords}
+                                onRemoveCandidate={handleRemoveCandidate}
                             />
                         </div>
                     </section>

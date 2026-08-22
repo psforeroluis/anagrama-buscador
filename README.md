@@ -26,3 +26,8 @@ npx tsc --noEmit
 Las partidas y plantillas aprendidas se guardan en IndexedDB, con
 `localStorage` como respaldo. Desde la propia interfaz se puede descargar e
 importar una copia de seguridad en JSON.
+
+En el panel **Mantenimiento** del tablero se pueden revisar todas las palabras
+visibles. Las que no están en el diccionario quedan en una lista separada y se
+pueden exportar como texto para revisarlas e incorporarlas posteriormente al
+diccionario principal. Esta lista no interviene en las búsquedas.

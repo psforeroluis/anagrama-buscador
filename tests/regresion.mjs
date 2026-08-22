@@ -89,6 +89,10 @@ check('camino rápido = generación completa', completa.data[0].score===rapida,
 check('checkWord reconoce una palabra real', send({type:'checkWord',payload:{word:'casa'}}).known);
 check('checkWord rechaza un invento', !send({type:'checkWord',payload:{word:'xqzpl'}}).known);
 check('checkWord rechaza una sola letra', !send({type:'checkWord',payload:{word:'a'}}).known);
+const lote=send({type:'checkWords',requestId:7,payload:{words:['casa','xqzpl','ACTRIZ']}});
+check('checkWords devuelve solo las desconocidas',
+      lote.requestId===7&&JSON.stringify(lote.unknown)===JSON.stringify(['xqzpl']),
+      JSON.stringify(lote.unknown));
 
 // vetar una de dos letras tiene que limpiar sus cruzadas
 const conAM=send({type:'solveBoard',payload:{board:b,blanksBoard:zeros,rack:'moretil',blanks:0,limit:5000}});

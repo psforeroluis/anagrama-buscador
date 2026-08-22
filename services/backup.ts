@@ -1,10 +1,11 @@
-// Copia de seguridad en un único fichero .json: partidas, palabras vetadas y
-// las plantillas de letras aprendidas. Sirve para no perder los tableros al
-// cambiar de navegador o de móvil, y antes de tocar nada delicado.
+// Copia de seguridad en un único fichero .json: partidas, palabras vetadas,
+// candidatas de diccionario y plantillas de letras aprendidas. Sirve para no
+// perder los tableros al cambiar de navegador o de móvil.
 
 import { Game, isValidGame, listGames, saveGame } from './gamesStore';
 import { loadBlocked, saveBlocked } from './wordBlocklist';
 import { exportTemplates, importTemplates } from './glyphStore';
+import { loadCandidates, saveCandidates } from './wordCandidates';
 
 const FORMAT = 'anagrama-backup';
 const VERSION = 1;
@@ -16,6 +17,7 @@ interface Backup {
     games: Game[];
     blocked: string[];
     glyphs: { letter: string; bits: string }[];
+    candidates?: string[];
 }
 
 export interface ImportSummary {
@@ -23,6 +25,7 @@ export interface ImportSummary {
     gamesRenamed: number;
     blocked: number;
     glyphs: number;
+    candidates: number;
 }
 
 export const buildBackup = async (): Promise<Backup> => ({
@@ -32,6 +35,7 @@ export const buildBackup = async (): Promise<Backup> => ({
     games: await listGames(),
     blocked: loadBlocked(),
     glyphs: await exportTemplates(),
+    candidates: loadCandidates(),
 });
 
 /** Descarga la copia como fichero. */
@@ -75,7 +79,7 @@ export const restoreBackup = async (json: string): Promise<ImportSummary> => {
         throw new Error('La copia no contiene una lista de partidas válida.');
     }
 
-    const summary: ImportSummary = { games: 0, gamesRenamed: 0, blocked: 0, glyphs: 0 };
+    const summary: ImportSummary = { games: 0, gamesRenamed: 0, blocked: 0, glyphs: 0, candidates: 0 };
 
     const existing = await listGames();
     const existingById = new Map(existing.map(g => [g.id, g]));
@@ -117,6 +121,12 @@ export const restoreBackup = async (json: string): Promise<ImportSummary> => {
 
     if (Array.isArray(parsed.glyphs)) {
         summary.glyphs = await importTemplates(parsed.glyphs);
+    }
+
+    if (Array.isArray(parsed.candidates)) {
+        const before = loadCandidates();
+        const merged = saveCandidates([...before, ...parsed.candidates.filter(w => typeof w === 'string')]);
+        summary.candidates = merged.length - before.length;
     }
 
     return summary;

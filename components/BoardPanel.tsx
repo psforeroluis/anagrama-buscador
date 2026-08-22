@@ -4,6 +4,7 @@ import ScreenshotImport from './ScreenshotImport';
 import Spinner from './Spinner';
 import { BoardMove, BoardState, MoveRanking } from '../types';
 import { censusTiles, countTiles, emptyBoard, setCell } from '../services/boardLayout';
+import { exportCandidates, extractBoardWords } from '../services/wordCandidates';
 
 interface BoardPanelProps {
     board: BoardState;
@@ -25,6 +26,9 @@ interface BoardPanelProps {
     blockedWords: string[];
     onBlockWord: (word: string) => void;
     onUnblockWord: (word: string) => void;
+    candidateWords: string[];
+    onCollectBoardWords: (words: string[]) => Promise<number>;
+    onRemoveCandidate: (word: string) => void;
 }
 
 const COLS = 'ABCDEFGHIJKLMNO';
@@ -36,11 +40,14 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
     board, rack, blanks, moves, totalMoves, isLoading, isWorkerReady, loadError,
     hasSearched, onBoardChange, onRackChange, onBlanksChange, onSolve, onShowToast,
     ranking, onRankingChange, blockedWords, onBlockWord, onUnblockWord,
+    candidateWords, onCollectBoardWords, onRemoveCandidate,
 }) => {
     const [selected, setSelected] = useState<BoardMove | null>(null);
     const [importing, setImporting] = useState(false);
     const [showBlocked, setShowBlocked] = useState(false);
     const [blockDraft, setBlockDraft] = useState('');
+    const [showMaintenance, setShowMaintenance] = useState(false);
+    const [checkingWords, setCheckingWords] = useState(false);
 
     const submitBlocked = useCallback(() => {
         const word = blockDraft.trim();
@@ -79,6 +86,29 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
         setSelected(null);
         onShowToast(`Jugada aplicada: ${m.word.toUpperCase()} (+${m.score})`);
     }, [board, onBoardChange, onRackChange, onBlanksChange, onShowToast]);
+
+    const collectBoardWords = useCallback(async () => {
+        const words = extractBoardWords(board);
+        if (words.length === 0) {
+            onShowToast('El tablero no contiene palabras completas');
+            return;
+        }
+        setCheckingWords(true);
+        try {
+            const added = await onCollectBoardWords(words);
+            onShowToast(added > 0
+                ? `${added} ${added === 1 ? 'palabra nueva detectada' : 'palabras nuevas detectadas'}`
+                : 'No se encontraron palabras nuevas');
+        } finally {
+            setCheckingWords(false);
+        }
+    }, [board, onCollectBoardWords, onShowToast]);
+
+    const downloadCandidates = useCallback(() => {
+        if (candidateWords.length === 0) return;
+        const filename = exportCandidates(candidateWords);
+        onShowToast(`Lista exportada: ${filename}`);
+    }, [candidateWords, onShowToast]);
 
     return (
         <>
@@ -385,6 +415,68 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                                 </div>
                             )}
 
+                        </div>
+                    )}
+                </div>
+
+                {/* Mantenimiento del diccionario: esta lista nunca entra en el motor. */}
+                <div>
+                    <button
+                        type="button"
+                        onClick={() => setShowMaintenance(value => !value)}
+                        className="focus-ring text-xs text-brand-subtle/70 hover:text-white transition-colors flex items-center gap-2"
+                    >
+                        <i className={`fa-solid fa-chevron-${showMaintenance ? 'down' : 'right'} text-[10px]`} />
+                        <i className="fa-solid fa-screwdriver-wrench" />
+                        Mantenimiento
+                        {candidateWords.length > 0 && (
+                            <span className="bg-amber-500/15 text-amber-200/90 rounded-md px-1.5 py-0.5 font-semibold">
+                                {candidateWords.length}
+                            </span>
+                        )}
+                    </button>
+
+                    {showMaintenance && (
+                        <div className="surface-inset rounded-2xl p-3 mt-2">
+                            <p className="text-[11px] text-brand-subtle/60 mb-3 leading-relaxed">
+                                Revisa todas las palabras visibles del tablero y guarda aparte las que faltan en el diccionario. No afectan a las búsquedas ni a las jugadas.
+                            </p>
+                            <div className="flex gap-2 mb-3">
+                                <button
+                                    type="button"
+                                    onClick={collectBoardWords}
+                                    disabled={!isWorkerReady || checkingWords || tilesOnBoard === 0}
+                                    className="focus-ring flex-1 px-3 py-2 rounded-xl bg-accent/15 text-accent-soft text-xs font-semibold hover:bg-accent/25 transition-colors disabled:opacity-40"
+                                >
+                                    <i className={`fa-solid ${checkingWords ? 'fa-circle-notch fa-spin' : 'fa-magnifying-glass'} mr-1.5`} />
+                                    {checkingWords ? 'Revisando…' : 'Revisar tablero'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={downloadCandidates}
+                                    disabled={candidateWords.length === 0}
+                                    className="focus-ring px-3 py-2 rounded-xl tile text-brand-subtle hover:text-white text-xs font-semibold transition-colors disabled:opacity-40"
+                                >
+                                    <i className="fa-solid fa-download mr-1.5" />Exportar
+                                </button>
+                            </div>
+                            {candidateWords.length === 0 ? (
+                                <p className="text-[11px] text-brand-subtle/45">Todavía no hay palabras pendientes.</p>
+                            ) : (
+                                <div className="flex flex-wrap gap-1.5">
+                                    {candidateWords.map(word => (
+                                        <button
+                                            key={word}
+                                            type="button"
+                                            onClick={() => onRemoveCandidate(word)}
+                                            className="focus-ring rounded-lg px-2.5 py-1 text-[11px] font-mono uppercase bg-amber-500/10 text-amber-200/90 hover:bg-red-500/15 hover:text-red-200 transition-colors group"
+                                            title={`Quitar ${word.toUpperCase()} de la lista`}
+                                        >
+                                            {word}<i className="fa-solid fa-xmark ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

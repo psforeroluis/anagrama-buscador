@@ -11,8 +11,8 @@ import {
     Game, createGame, deleteGame, initGames, listGames, nextGameName, saveGame,
     getActiveId, setActiveId as persistActiveId,
 } from './services/gamesStore';
-import { blockWord, loadBlocked, unblockWord } from './services/wordBlocklist';
-import { addCandidates, loadCandidates, removeCandidate } from './services/wordCandidates';
+import { blockWord, loadBlocked, saveBlocked, unblockWord } from './services/wordBlocklist';
+import { addCandidates, loadCandidates, removeCandidate, saveCandidates } from './services/wordCandidates';
 import { downloadBackup, restoreBackup } from './services/backup';
 
 const slotsToPattern = (slots: BoardSlot[]): string =>
@@ -206,19 +206,41 @@ const App: React.FC = () => {
         if (boardSearched) runBoardSearch(next, ranking);
     }, [boardSearched, runBoardSearch, ranking]);
 
-    const handleCollectBoardWords = useCallback((words: string[]): Promise<number> => {
-        if (!workerRef.current || !isWorkerReady || words.length === 0) return Promise.resolve(0);
+    const checkUnknownWords = useCallback((words: string[]): Promise<string[]> => {
+        if (!workerRef.current || !isWorkerReady || words.length === 0) return Promise.resolve([]);
         const requestId = ++wordCheckRequestRef.current;
         return new Promise(resolve => {
-            wordCheckResolversRef.current.set(requestId, unknown => {
-                const before = new Set(loadCandidates());
-                const next = addCandidates(unknown);
-                setCandidateWords(next);
-                resolve(next.filter(word => !before.has(word)).length);
-            });
+            wordCheckResolversRef.current.set(requestId, resolve);
             workerRef.current?.postMessage({ type: 'checkWords', requestId, payload: { words } });
         });
     }, [isWorkerReady]);
+
+    const handleCollectBoardWords = useCallback(async (words: string[]): Promise<number> => {
+        const unknown = await checkUnknownWords(words);
+        const before = new Set(loadCandidates());
+        const next = addCandidates(unknown);
+        setCandidateWords(next);
+        return next.filter(word => !before.has(word)).length;
+    }, [checkUnknownWords]);
+
+    const handleVerifyMaintenance = useCallback(async (): Promise<{ additions: number; removals: number }> => {
+        const additions = loadCandidates();
+        const removals = loadBlocked();
+        const unknown = new Set(await checkUnknownWords([...new Set([...additions, ...removals])]));
+
+        // Un alta está aplicada cuando ya existe; una baja, cuando ya no existe.
+        const pendingAdditions = saveCandidates(additions.filter(word => unknown.has(word)));
+        const pendingRemovals = removals.filter(word => !unknown.has(word));
+        saveBlocked(pendingRemovals);
+        setCandidateWords(pendingAdditions);
+        setBlockedWords(pendingRemovals);
+        if (boardSearched) runBoardSearch(pendingRemovals, ranking);
+
+        return {
+            additions: additions.length - pendingAdditions.length,
+            removals: removals.length - pendingRemovals.length,
+        };
+    }, [checkUnknownWords, boardSearched, runBoardSearch, ranking]);
 
     const handleRemoveCandidate = useCallback((word: string) => {
         setCandidateWords(removeCandidate(word));
@@ -466,6 +488,7 @@ const App: React.FC = () => {
                                 candidateWords={candidateWords}
                                 onCollectBoardWords={handleCollectBoardWords}
                                 onRemoveCandidate={handleRemoveCandidate}
+                                onVerifyMaintenance={handleVerifyMaintenance}
                             />
                         </div>
                     </section>

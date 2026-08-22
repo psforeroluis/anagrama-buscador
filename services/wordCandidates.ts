@@ -47,8 +47,7 @@ export const addCandidates = (words: string[]): string[] =>
 export const removeCandidate = (word: string): string[] =>
     saveCandidates(loadCandidates().filter(candidate => candidate !== normalizeWord(word)));
 
-export const exportCandidates = (words: string[]): string => {
-    const filename = `anagrama-palabras-detectadas-${new Date().toISOString().slice(0, 10)}.txt`;
+const downloadWords = (words: string[], filename: string): void => {
     const blob = new Blob([`${words.join('\n')}\n`], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -58,5 +57,24 @@ export const exportCandidates = (words: string[]): string => {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    return filename;
+};
+
+export interface MaintenanceExport {
+    additions?: string;
+    removals?: string;
+}
+
+/** Descarga por separado las altas y bajas para aplicarlas al diccionario base. */
+export const exportMaintenance = (additions: string[], removals: string[]): MaintenanceExport => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const result: MaintenanceExport = {};
+    if (additions.length > 0) {
+        result.additions = `anagrama-diccionario-altas-${stamp}.txt`;
+        downloadWords(additions, result.additions);
+    }
+    if (removals.length > 0) {
+        result.removals = `anagrama-diccionario-bajas-${stamp}.txt`;
+        downloadWords(removals, result.removals);
+    }
+    return result;
 };

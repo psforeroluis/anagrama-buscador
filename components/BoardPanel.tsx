@@ -4,7 +4,7 @@ import ScreenshotImport from './ScreenshotImport';
 import Spinner from './Spinner';
 import { BoardMove, BoardState, MoveRanking } from '../types';
 import { censusTiles, countTiles, emptyBoard, setCell } from '../services/boardLayout';
-import { exportCandidates, extractBoardWords } from '../services/wordCandidates';
+import { exportMaintenance, extractBoardWords } from '../services/wordCandidates';
 
 interface BoardPanelProps {
     board: BoardState;
@@ -29,6 +29,7 @@ interface BoardPanelProps {
     candidateWords: string[];
     onCollectBoardWords: (words: string[]) => Promise<number>;
     onRemoveCandidate: (word: string) => void;
+    onVerifyMaintenance: () => Promise<{ additions: number; removals: number }>;
 }
 
 const COLS = 'ABCDEFGHIJKLMNO';
@@ -40,7 +41,7 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
     board, rack, blanks, moves, totalMoves, isLoading, isWorkerReady, loadError,
     hasSearched, onBoardChange, onRackChange, onBlanksChange, onSolve, onShowToast,
     ranking, onRankingChange, blockedWords, onBlockWord, onUnblockWord,
-    candidateWords, onCollectBoardWords, onRemoveCandidate,
+    candidateWords, onCollectBoardWords, onRemoveCandidate, onVerifyMaintenance,
 }) => {
     const [selected, setSelected] = useState<BoardMove | null>(null);
     const [importing, setImporting] = useState(false);
@@ -48,6 +49,7 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
     const [blockDraft, setBlockDraft] = useState('');
     const [showMaintenance, setShowMaintenance] = useState(false);
     const [checkingWords, setCheckingWords] = useState(false);
+    const [verifyingMaintenance, setVerifyingMaintenance] = useState(false);
 
     const submitBlocked = useCallback(() => {
         const word = blockDraft.trim();
@@ -104,11 +106,24 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
         }
     }, [board, onCollectBoardWords, onShowToast]);
 
-    const downloadCandidates = useCallback(() => {
-        if (candidateWords.length === 0) return;
-        const filename = exportCandidates(candidateWords);
-        onShowToast(`Lista exportada: ${filename}`);
-    }, [candidateWords, onShowToast]);
+    const downloadMaintenance = useCallback(() => {
+        const files = exportMaintenance(candidateWords, blockedWords);
+        const count = Number(!!files.additions) + Number(!!files.removals);
+        if (count > 0) onShowToast(`${count} ${count === 1 ? 'lista exportada' : 'listas exportadas'}`);
+    }, [candidateWords, blockedWords, onShowToast]);
+
+    const verifyMaintenance = useCallback(async () => {
+        setVerifyingMaintenance(true);
+        try {
+            const applied = await onVerifyMaintenance();
+            const total = applied.additions + applied.removals;
+            onShowToast(total > 0
+                ? `Aplicado: ${applied.additions} altas · ${applied.removals} bajas`
+                : 'El diccionario aún no contiene los cambios pendientes');
+        } finally {
+            setVerifyingMaintenance(false);
+        }
+    }, [onVerifyMaintenance, onShowToast]);
 
     return (
         <>
@@ -429,9 +444,9 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                         <i className={`fa-solid fa-chevron-${showMaintenance ? 'down' : 'right'} text-[10px]`} />
                         <i className="fa-solid fa-screwdriver-wrench" />
                         Mantenimiento
-                        {candidateWords.length > 0 && (
+                        {candidateWords.length + blockedWords.length > 0 && (
                             <span className="bg-amber-500/15 text-amber-200/90 rounded-md px-1.5 py-0.5 font-semibold">
-                                {candidateWords.length}
+                                {candidateWords.length + blockedWords.length}
                             </span>
                         )}
                     </button>
@@ -439,7 +454,7 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                     {showMaintenance && (
                         <div className="surface-inset rounded-2xl p-3 mt-2">
                             <p className="text-[11px] text-brand-subtle/60 mb-3 leading-relaxed">
-                                Revisa todas las palabras visibles del tablero y guarda aparte las que faltan en el diccionario. No afectan a las búsquedas ni a las jugadas.
+                                Prepara las altas detectadas y las palabras vetadas que deben eliminarse. Las altas no afectan al juego; las bajas siguen vetadas hasta comprobar que ya se retiraron del diccionario.
                             </p>
                             <div className="flex gap-2 mb-3">
                                 <button
@@ -453,17 +468,25 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={downloadCandidates}
-                                    disabled={candidateWords.length === 0}
+                                    onClick={downloadMaintenance}
+                                    disabled={candidateWords.length + blockedWords.length === 0}
                                     className="focus-ring px-3 py-2 rounded-xl tile text-brand-subtle hover:text-white text-xs font-semibold transition-colors disabled:opacity-40"
                                 >
                                     <i className="fa-solid fa-download mr-1.5" />Exportar
                                 </button>
                             </div>
-                            {candidateWords.length === 0 ? (
-                                <p className="text-[11px] text-brand-subtle/45">Todavía no hay palabras pendientes.</p>
-                            ) : (
-                                <div className="flex flex-wrap gap-1.5">
+                            <div className="grid grid-cols-2 gap-2 mb-3 text-[11px]">
+                                <div className="rounded-xl bg-emerald-500/[.07] px-2.5 py-2 text-emerald-200/80">
+                                    <strong className="block text-base">{candidateWords.length}</strong> altas pendientes
+                                </div>
+                                <div className="rounded-xl bg-red-500/[.07] px-2.5 py-2 text-red-200/80">
+                                    <strong className="block text-base">{blockedWords.length}</strong> bajas pendientes
+                                </div>
+                            </div>
+                            {candidateWords.length > 0 && (
+                                <div className="mb-3">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/70 mb-1.5">Añadir</p>
+                                    <div className="flex flex-wrap gap-1.5">
                                     {candidateWords.map(word => (
                                         <button
                                             key={word}
@@ -475,8 +498,31 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
                                             {word}<i className="fa-solid fa-xmark ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                                         </button>
                                     ))}
+                                    </div>
                                 </div>
                             )}
+                            {blockedWords.length > 0 && (
+                                <div className="mb-3">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-red-300/70 mb-1.5">Eliminar</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {blockedWords.map(word => (
+                                            <span key={word} className="rounded-lg px-2.5 py-1 text-[11px] font-mono uppercase bg-red-500/10 text-red-200/90">
+                                                {word}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            <button
+                                type="button"
+                                onClick={verifyMaintenance}
+                                disabled={!isWorkerReady || verifyingMaintenance || candidateWords.length + blockedWords.length === 0}
+                                className="focus-ring w-full px-3 py-2 rounded-xl tile text-brand-subtle hover:text-white text-xs font-semibold transition-colors disabled:opacity-40"
+                                title="Limpia únicamente los cambios que ya estén presentes en el diccionario instalado"
+                            >
+                                <i className={`fa-solid ${verifyingMaintenance ? 'fa-circle-notch fa-spin' : 'fa-circle-check'} mr-1.5`} />
+                                {verifyingMaintenance ? 'Comprobando…' : 'Comprobar cambios aplicados'}
+                            </button>
                         </div>
                     )}
                 </div>

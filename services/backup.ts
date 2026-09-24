@@ -84,13 +84,13 @@ export const restoreBackup = async (json: string): Promise<ImportSummary> => {
     const existing = await listGames();
     const existingById = new Map(existing.map(g => [g.id, g]));
     const usedNames = new Set(existing.map(g => g.name));
-    const signature = (g: Game) => g.board.letters.join('') + '|' + g.board.blanks.join('');
+    const signature = (g: Game) => g.board.letters.join('') + '|' + g.board.blanks.join('') + '|' + g.rack + '|' + g.blanks;
 
     for (const game of parsed.games ?? []) {
         if (!isValidGame(game)) continue;
 
         const clash = existingById.get(game.id);
-        // Mismo id y mismo tablero: es la misma partida, no la duplicamos.
+        // Mismo id, tablero y atril: es la misma partida, no la duplicamos.
         if (clash && signature(clash) === signature(game)) continue;
 
         // Dos partidas con el mismo nombre en la lista no hay quien las
@@ -109,6 +109,7 @@ export const restoreBackup = async (json: string): Promise<ImportSummary> => {
             : { ...game, name };
 
         await saveGame(record);
+        existingById.set(record.id, record);
         summary.games++;
     }
 

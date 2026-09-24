@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useLayoutEffect } from 'react';
 import Header from './components/Header';
 import WordInput from './components/WordInput';
 import Results from './components/Results';
@@ -23,7 +23,8 @@ type WorkerMessage =
     | { type: 'result'; data: FoundWord[]; requestId?: number }
     | { type: 'boardResult'; data: BoardMove[]; total: number; requestId?: number }
     | { type: 'checkWord'; word: string; known: boolean }
-    | { type: 'checkWords'; unknown: string[]; requestId?: number };
+    | { type: 'checkWords'; unknown: string[]; requestId?: number }
+    | { type: 'error'; operation: string; requestId?: number };
 
 type Tab = 'buscador' | 'tablero';
 
@@ -83,19 +84,55 @@ const App: React.FC = () => {
     const searchRequestRef = useRef(0);
     const boardRequestRef = useRef(0);
     const wordCheckRequestRef = useRef(0);
-    const wordCheckResolversRef = useRef(new Map<number, (words: string[]) => void>());
+    const wordCheckResolversRef = useRef(new Map<number, {
+        resolve: (words: string[]) => void;
+        reject: (error: Error) => void;
+        timer: number;
+    }>());
+    const rejectWordChecks = useCallback((message: string) => {
+        for (const pending of wordCheckResolversRef.current.values()) {
+            clearTimeout(pending.timer);
+            pending.reject(new Error(message));
+        }
+        wordCheckResolversRef.current.clear();
+    }, []);
+
+    const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+    const pendingWrites = useRef(new Set<Promise<void>>());
+    const failedGames = useRef(new Map<string, Game>());
+    const persistGame = useCallback((game: Game) => {
+        setSaveStatus('saving');
+        const operation = saveGame(game);
+        pendingWrites.current.add(operation);
+        operation.then(() => {
+            pendingWrites.current.delete(operation);
+            failedGames.current.delete(game.id);
+            if (pendingWrites.current.size === 0) setSaveStatus(failedGames.current.size ? 'error' : 'saved');
+        }, () => {
+            pendingWrites.current.delete(operation);
+            failedGames.current.set(game.id, game);
+            setSaveStatus('error');
+            showToast('No se pudo guardar la partida. Conserva esta pestaña abierta e inténtalo de nuevo.');
+        });
+        return operation;
+    }, [showToast]);
 
     // --- Web Worker ---
     useEffect(() => {
+        const controller = new AbortController();
+        let worker: Worker | undefined;
+        let workerUrl: string | undefined;
         const init = async () => {
             try {
                 const [wRes, dRes] = await Promise.all([
-                    fetch('/services/anagramSolver.ts'),
-                    fetch('/services/dictionary.txt'),
+                    fetch('/services/anagramSolver.ts', { signal: controller.signal }),
+                    fetch('/services/dictionary.txt', { signal: controller.signal }),
                 ]);
                 if (!wRes.ok || !dRes.ok) throw new Error('Failed to load');
                 const [script, dict] = await Promise.all([wRes.text(), dRes.text()]);
-                const worker = new Worker(URL.createObjectURL(new Blob([script], { type: 'application/javascript' })));
+                if (controller.signal.aborted) return;
+                workerUrl = URL.createObjectURL(new Blob([script], { type: 'application/javascript' }));
+                worker = new Worker(workerUrl);
                 workerRef.current = worker;
                 worker.onmessage = (e: MessageEvent<WorkerMessage>) => {
                     if (e.data.type === 'ready') setIsWorkerReady(true);
@@ -112,12 +149,27 @@ const App: React.FC = () => {
                         }
                     }
                     else if (e.data.type === 'checkWords') {
-                        const resolve = e.data.requestId === undefined
+                        const pending = e.data.requestId === undefined
                             ? undefined
                             : wordCheckResolversRef.current.get(e.data.requestId);
-                        if (resolve && e.data.requestId !== undefined) {
+                        if (pending && e.data.requestId !== undefined) {
                             wordCheckResolversRef.current.delete(e.data.requestId);
-                            resolve(e.data.unknown);
+                            clearTimeout(pending.timer);
+                            pending.resolve(e.data.unknown);
+                        }
+                    }
+                    else if (e.data.type === 'error') {
+                        if (e.data.operation === 'checkWords' && e.data.requestId !== undefined) {
+                            const pending = wordCheckResolversRef.current.get(e.data.requestId);
+                            if (pending) {
+                                wordCheckResolversRef.current.delete(e.data.requestId);
+                                clearTimeout(pending.timer);
+                                pending.reject(new Error('No se pudo comprobar el diccionario.'));
+                            }
+                        } else {
+                            setIsLoading(false);
+                            setBoardLoading(false);
+                            showToast('No se pudo completar la búsqueda. Inténtalo de nuevo.');
                         }
                     }
                     else if (e.data.type === 'boardResult') {
@@ -127,13 +179,25 @@ const App: React.FC = () => {
                         setBoardLoading(false);
                     }
                 };
-                worker.onerror = () => { setIsLoading(false); setBoardLoading(false); setLoadError(true); };
+                worker.onerror = () => {
+                    setIsWorkerReady(false);
+                    setIsLoading(false);
+                    setBoardLoading(false);
+                    setLoadError(true);
+                    rejectWordChecks('El diccionario dejó de responder.');
+                };
                 worker.postMessage({ type: 'init', dictionaryText: dict });
-            } catch { setIsLoading(false); setLoadError(true); }
+            } catch { if (!controller.signal.aborted) { setIsLoading(false); setLoadError(true); } }
         };
         init();
-        return () => workerRef.current?.terminate();
-    }, []);
+        return () => {
+            controller.abort();
+            rejectWordChecks('Se cerró la comprobación del diccionario.');
+            worker?.terminate();
+            if (workerRef.current === worker) workerRef.current = null;
+            if (workerUrl) URL.revokeObjectURL(workerUrl);
+        };
+    }, [rejectWordChecks, showToast]);
 
     // --- Search ---
     const handleSearch = useCallback(() => {
@@ -207,11 +271,18 @@ const App: React.FC = () => {
     }, [boardSearched, runBoardSearch, ranking]);
 
     const checkUnknownWords = useCallback((words: string[]): Promise<string[]> => {
-        if (!workerRef.current || !isWorkerReady || words.length === 0) return Promise.resolve([]);
+        if (words.length === 0) return Promise.resolve([]);
+        if (!workerRef.current || !isWorkerReady) {
+            return Promise.reject(new Error('El diccionario no está disponible.'));
+        }
         const requestId = ++wordCheckRequestRef.current;
-        return new Promise(resolve => {
-            wordCheckResolversRef.current.set(requestId, resolve);
-            workerRef.current?.postMessage({ type: 'checkWords', requestId, payload: { words } });
+        return new Promise((resolve, reject) => {
+            const timer = window.setTimeout(() => {
+                wordCheckResolversRef.current.delete(requestId);
+                reject(new Error('La comprobación del diccionario tardó demasiado.'));
+            }, 15_000);
+            wordCheckResolversRef.current.set(requestId, { resolve, reject, timer });
+            workerRef.current!.postMessage({ type: 'checkWords', requestId, payload: { words } });
         });
     }, [isWorkerReady]);
 
@@ -250,7 +321,7 @@ const App: React.FC = () => {
     useEffect(() => {
         let cancelled = false;
         (async () => {
-            const loaded = await initGames();
+            const loaded = await initGames().catch(() => { setSaveStatus('error'); return [createGame('Partida 1')]; });
             if (cancelled) return;
             const saved = getActiveId();
             const active = loaded.find(g => g.id === saved) ?? loaded[0];
@@ -263,44 +334,35 @@ const App: React.FC = () => {
         return () => { cancelled = true; };
     }, []);
 
-    // Autoguardado de la partida activa, agrupando ráfagas de tecleo.
+    // Sin temporizador: el estado de la lista se actualiza antes del siguiente
+    // evento y cada edición queda encolada para persistir, incluso al cambiar.
     const skipSaveRef = useRef(true);
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (!activeGameId) return;
         if (skipSaveRef.current) { skipSaveRef.current = false; return; }
-
-        const timer = window.setTimeout(() => {
-            setGames(prev => {
-                const current = prev.find(g => g.id === activeGameId);
-                if (!current) return prev;
-                const updated: Game = {
-                    ...current,
-                    board,
-                    rack: boardRack,
-                    blanks: boardBlanks,
-                    updatedAt: Date.now(),
-                };
-                void saveGame(updated);
-                return prev.map(g => (g.id === activeGameId ? updated : g));
-            });
-        }, 400);
-        return () => window.clearTimeout(timer);
-    }, [board, boardRack, boardBlanks, activeGameId]);
+        const current = games.find(g => g.id === activeGameId);
+        if (!current) return;
+        const updated: Game = {
+            ...current, board, rack: boardRack, blanks: boardBlanks, updatedAt: Date.now(),
+        };
+        setGames(prev => prev.map(g => g.id === activeGameId ? updated : g));
+        void persistGame(updated);
+    }, [board, boardRack, boardBlanks, activeGameId, persistGame]);
 
     const handleSelectGame = useCallback((id: string) => {
         const game = games.find(g => g.id === id);
-        if (!game) return;
+        if (!game || id === activeGameId) return;
         skipSaveRef.current = true;
         setActiveGameId(id);
         persistActiveId(id);
         setBoard(game.board);
         setBoardRack(game.rack);
         setBoardBlanks(game.blanks);
-    }, [games]);
+    }, [games, activeGameId]);
 
     const handleCreateGame = useCallback(() => {
         const game = createGame(nextGameName(games));
-        void saveGame(game);
+        void persistGame(game);
         skipSaveRef.current = true;
         setGames(prev => [game, ...prev]);
         setActiveGameId(game.id);
@@ -309,19 +371,27 @@ const App: React.FC = () => {
         setBoardRack(game.rack);
         setBoardBlanks(game.blanks);
         showToast(`${game.name} creada`);
-    }, [games]);
+    }, [games, persistGame, showToast]);
 
     const handleExportGames = useCallback(async () => {
         try {
+            // Reintenta también el estado actual si una escritura anterior falló.
+            for (const failed of failedGames.current.values()) {
+                await persistGame(games.find(g => g.id === failed.id) ?? failed);
+            }
+            const current = games.find(g => g.id === activeGameId);
+            if (current) await persistGame({ ...current, board, rack: boardRack, blanks: boardBlanks });
+            await Promise.all([...pendingWrites.current]);
             const filename = await downloadBackup();
             showToast(`Copia descargada: ${filename}`);
         } catch {
             showToast('No se pudo generar la copia');
         }
-    }, []);
+    }, [games, activeGameId, board, boardRack, boardBlanks, persistGame]);
 
     const handleImportGames = useCallback(async (file: File) => {
         try {
+            await Promise.all([...pendingWrites.current]);
             const summary = await restoreBackup(await file.text());
             const reloaded = await listGames();
             setGames(reloaded);
@@ -346,13 +416,12 @@ const App: React.FC = () => {
     }, []);
 
     const handleRenameGame = useCallback((id: string, name: string) => {
-        setGames(prev => prev.map(g => {
-            if (g.id !== id) return g;
-            const updated = { ...g, name, updatedAt: Date.now() };
-            void saveGame(updated);
-            return updated;
-        }));
-    }, []);
+        const game = games.find(g => g.id === id);
+        if (!game) return;
+        const updated = { ...game, name, updatedAt: Date.now() };
+        setGames(prev => prev.map(g => g.id === id ? updated : g));
+        void persistGame(updated);
+    }, [games, persistGame]);
 
     const handleDeleteGame = useCallback((id: string) => {
         const deleted = games.find(g => g.id === id);
@@ -361,7 +430,7 @@ const App: React.FC = () => {
         if (!deleted || remaining.length === 0) return;
 
         const wasActive = id === activeGameId;
-        void deleteGame(id);
+        void deleteGame(id).catch(() => { setSaveStatus('error'); showToast('No se pudo eliminar la partida del almacenamiento.'); });
         setGames(remaining);
         if (wasActive) {
             const next = remaining[0];
@@ -379,7 +448,7 @@ const App: React.FC = () => {
             label: 'Deshacer',
             icon: 'fa-rotate-left',
             onClick: () => {
-                void saveGame(deleted);
+                void persistGame(deleted);
                 setGames(prev =>
                     prev.some(g => g.id === deleted.id)
                         ? prev
@@ -395,7 +464,7 @@ const App: React.FC = () => {
                 closeToast();
             },
         });
-    }, [games, activeGameId, showToast, closeToast]);
+    }, [games, activeGameId, showToast, closeToast, persistGame]);
 
     // Al abrir la pestaña de tablero preparamos el DAWG en segundo plano,
     // así el primer "Mejor jugada" ya lo encuentra listo.
@@ -426,6 +495,9 @@ const App: React.FC = () => {
 
     return (
         <div className="min-h-screen font-sans flex flex-col items-center px-4 sm:px-6 lg:px-8 relative">
+            <p role="status" className="relative z-10 text-xs text-brand-subtle mt-3">
+                {saveStatus === 'saving' ? 'Guardando…' : saveStatus === 'error' ? 'Error al guardar: descarga una copia para reintentar' : 'Guardado'}
+            </p>
             {/* Ambient light */}
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
                 <div className="absolute -top-[15%] -left-[5%] w-[45vw] h-[45vw] rounded-full bg-accent-deep/20 blur-[130px] animate-float"></div>

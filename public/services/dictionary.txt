@@ -356,7 +356,6 @@ a nativitate
 a pari
 a posteriori
 a priori
-a quo
 a radice
 a sensu contrario
 a simili
@@ -7689,7 +7688,6 @@ acabronadas
 acabronado
 acabronado, da
 acabronados
-acace
 acachar
 acacharse
 acacheta
@@ -9663,8 +9661,7 @@ acatasteis
 acate
 acateca
 acatecas
-acateco
-acateco, ca
+acateca
 acatecos
 acateis
 acatemos
@@ -21936,7 +21933,6 @@ admonitorias
 admonitorio
 admonitorio, ria
 admonitorios
-ADN
 adnada
 adnadas
 adnado
@@ -25446,7 +25442,6 @@ afijarais
 afijaramos
 afijaran
 afijaras
-afijare
 afijareis
 afijaremos
 afijaren
@@ -31522,7 +31517,6 @@ aguileñas
 aguileño
 aguileño, ña
 aguileños
-aguilera
 aguililla
 aguilillas
 aguilon
@@ -43927,8 +43921,6 @@ alnedo
 alnedos
 alno
 alnos
-aló
-alo-
 aloaria
 aloarias
 aloba
@@ -44219,7 +44211,6 @@ alomada
 alomadas
 alomado
 alomado, da
-alomados
 alomais
 alomamos
 aloman
@@ -45081,7 +45072,6 @@ alterquen
 alterques
 alteza
 altezas
-alti-
 altibajo
 altibajos
 altillo
@@ -45954,7 +45944,6 @@ alzhéimer
 alzheimeres
 alzo
 alzos
-AM
 ama
 amá
 amaba
@@ -54172,7 +54161,6 @@ amuzgas
 amuzgo
 amuzgo, ga
 amuzgos
-an-
 ana
 ana-
 ana1
@@ -75703,7 +75691,6 @@ arquetípico, ca
 arquetipicos
 arquetipo
 arquetipos
-arqui-
 arquibanco
 arquibancos
 arquidiocesis
@@ -90910,7 +90897,6 @@ atopadizas
 atopadizo
 atopadizo, za
 atopadizos
-atopia
 atopias
 atopica
 atópica
@@ -97909,7 +97895,6 @@ axenico
 axénico
 axénico, ca
 axenicos
-axes
 axial
 axiales
 axil
@@ -109189,7 +109174,6 @@ bezudas
 bezudo
 bezudo, da
 bezudos
-bi-
 biafreña
 biafreño
 biajaca
@@ -111692,7 +111676,6 @@ bizqueo
 bizquera
 bizqueras
 bizques
-bla
 blabla
 blablá
 blablabla
@@ -112426,7 +112409,6 @@ boaqueños
 boardilla
 boardillas
 boas
-boatiné
 boato
 boatos
 boba
@@ -113087,7 +113069,6 @@ bodeguero
 bodeguero, ra
 bodegueros
 bodes
-bodi
 bodigo
 bodigos
 bodijo
@@ -114312,7 +114293,7 @@ bomper
 bómper
 bomperes
 bon
-bon, na
+bon
 bona
 Bona
 bonachon
@@ -119539,7 +119520,6 @@ bufonizaste
 bufonizasteis
 bufonizo
 bufos
-buga
 bugalla
 bugallas
 buganvilia
@@ -136726,7 +136706,6 @@ carruna
 carrunas
 carrusel
 carruseles
-carst
 carstica
 carsticas
 carstico
@@ -140561,7 +140540,6 @@ cazurro
 cazurro, rra
 cazurros
 cazuz
-CD
 CD-ROM
 ce
 ce1
@@ -144627,7 +144605,6 @@ cevicherias
 cevichero
 cevicheros
 ceviches
-ch
 cha
 chabacan
 chabacán
@@ -160805,7 +160782,6 @@ cneoraceos
 cnidario
 cnidarios
 cnmoción
-co-
 coa
 coa1
 coa2
@@ -165696,9 +165672,7 @@ colquicaceos
 colquico
 cólquico
 colquicos
-colt
 coltán
-colts
 colubrido
 colúbrido
 colubridos
@@ -195634,7 +195608,6 @@ currelo
 curremos
 curren
 curres
-curri
 currican
 curricán
 curricanes
@@ -197255,7 +197228,6 @@ davídico, ca
 davidicos
 dazibao
 dazibaos
-DDT
 de
 de facto
 de iure
@@ -205051,7 +205023,6 @@ deriven
 derives
 derivo
 derivos
-derm-
 dermalgia
 dermalgias
 dermat-
@@ -270639,8 +270610,6 @@ diyambo
 diyambos
 dizque
 dizques
-DNA
-DNI
 do
 do ut des
 do1
@@ -272035,7 +272004,6 @@ donquijotescos
 dontancredismo
 dontancredísmo
 dontancredismos
-dónut
 doña
 doña1
 doña2
@@ -275595,7 +275563,6 @@ egenas
 egeno
 egeno, na
 egenos
-Egeria
 egestad
 egestades
 egestion
@@ -277651,7 +277618,6 @@ elzeviriano, na
 elzevirianos
 elzevirio
 elzevirios
-em-
 emaciacion
 emaciación
 emaciaciones
@@ -321329,7 +321295,6 @@ ennudezcamos
 ennudezcan
 ennudezcas
 ennudezco
-eno-
 enodio
 enodios
 enodrida
@@ -336395,7 +336360,6 @@ epulón
 epulones
 equeco
 equecos
-equi-
 equiangula
 equiángula
 equiangulas
@@ -336852,7 +336816,6 @@ equivoquen
 equivoques
 equivoquista
 equivoquistas
-er
 era
 era1
 era2
@@ -356534,12 +356497,10 @@ etico
 eticos
 etileno
 etilenos
-etilica
-etílica
 etilicas
 etilico
 etílico
-etílico, ca
+etílico
 etilicos
 etilismo
 etilismos
@@ -356793,7 +356754,6 @@ etólogo
 etólogo, ga
 etologos
 etolos
-etopeua
 etopeya
 etopeyas
 etrusca
@@ -358109,8 +358069,6 @@ ex profeso
 ex-
 ex-1
 ex-2
-exa
-exa-
 exabrupto
 exabruptos
 exaccion
@@ -360363,7 +360321,6 @@ exitoso
 exitoso, sa
 exitosos
 exlibris
-exo-
 exobiologia
 exobiología
 exobiologias
@@ -364163,7 +364120,6 @@ exutorio
 exutorios
 exvoto
 exvotos
-ey
 eyacula
 eyaculaba
 eyaculabais
@@ -368281,8 +368237,6 @@ fedatarias
 fedatario
 fedatario, ria
 fedatarios
-fedayin
-fedayín
 fedayines
 fedegar
 federa
@@ -373179,7 +373133,6 @@ flaon
 flaón
 flaones
 flap
-flaps
 flaquea
 flaqueaba
 flaqueabais
@@ -390154,7 +390107,6 @@ gnostico
 gnóstico
 gnóstico, ca
 gnosticos
-go
 gobelino
 gobelinos
 goben
@@ -390510,7 +390462,6 @@ golfo2, fa
 golfo3
 golfos
 golfs
-Golgi
 goliarda
 goliardas
 goliardesca
@@ -391121,7 +391072,6 @@ gonococo
 gonococos
 gonorrea
 gonorreas
-goño
 gorbices
 gorbion
 gorbión
@@ -391834,7 +391784,6 @@ gozoso, sa
 gozosos
 gozque
 gozques
-GPS
 Graaf
 graba
 grababa
@@ -394696,7 +394645,6 @@ gruyesemos
 gruyesen
 gruyeses
 gruyo
-gu
 gua
 gua1
 gua2
@@ -400447,7 +400395,6 @@ hasani
 hasaní
 hasanies
 hasanis
-hasio
 hassio
 hasta
 hastia
@@ -402090,7 +402037,6 @@ hepatomegalias
 hepatopatia
 hepatopatía
 hepatopatias
-hepta-
 heptacordo
 heptacordos
 heptaedro
@@ -403738,7 +403684,6 @@ heurístico, ca
 heuristicos
 hevea
 heveas
-hexa-
 hexacoralario
 hexacoralarios
 hexacordo
@@ -403792,7 +403737,6 @@ hexastilo
 hexástilo
 hexástilo, la
 hexastilos
-hey
 hez
 hi
 hí
@@ -404006,7 +403950,6 @@ hidatídico
 hidatídico, ca
 hidatidicos
 hidatidosis
-hideal
 hideputa
 hideputas
 hidionda
@@ -404603,7 +404546,6 @@ hierve
 hierven
 hierves
 hiervo
-hifa
 higa
 higadilla
 higadillas
@@ -407641,7 +407583,6 @@ hollywoodiano, na
 hollywoodiense
 holmio
 holmios
-holo-
 holocausto
 holocaustos
 holocena
@@ -431460,7 +431401,6 @@ iotas
 iotizacion
 iotización
 iotizaciones
-IPC
 ipecacuana
 ipecacuanas
 ipegue
@@ -435967,7 +435907,6 @@ jesuitino, na
 jesuitinos
 jesuitismo
 jesuitismos
-Jesús
 jesusea
 jesuseaba
 jesuseabais
@@ -436767,7 +436706,6 @@ jirpeemos
 jirpeen
 jirpees
 jirpeo
-jis
 jisca
 jiscas
 jismaina
@@ -442263,7 +442201,6 @@ lancines
 lancino
 lancurdia
 lancurdias
-land
 landa
 landas
 lande
@@ -450254,7 +450191,6 @@ lízaro
 lizas
 lizo
 lizos
-ll
 llabana
 llábana
 llabanas
@@ -450773,7 +450709,6 @@ llenazon
 llenazón
 llenazones
 llene
-lleneces
 lleneis
 llenemos
 llenen
@@ -452734,9 +452669,7 @@ lozano
 lozano, na
 lozanos
 lozas
-LP
 lqanzagranadas
-LSD
 lua
 lúa
 luas
@@ -454020,7 +453953,6 @@ luzcas
 luzco
 lycra
 m
-ma
 mabi
 mabí
 mabies
@@ -474076,7 +474008,6 @@ meya
 meyas
 meyor
 meyores
-mez
 meza
 mezais
 mezamos
@@ -491668,7 +491599,6 @@ nizardas
 nizardo
 nizardo, da
 nizardos
-NN
 no
 nobel
 nobeles
@@ -499298,7 +499228,6 @@ opacifiques
 opaco
 opaco, ca
 opacos
-opad
 opada
 opadas
 opado
@@ -499391,7 +499320,6 @@ oparian
 oparias
 oparon
 opas
-opase
 opaseis
 opasemos
 opasen
@@ -499403,7 +499331,6 @@ opción
 opcional
 opcionales
 opciones
-ope
 opeis
 opemos
 open
@@ -502325,7 +502252,6 @@ osmótico, ca
 osmoticos
 oso
 oso, sa
-osobuco
 osobucos
 osornina
 osorninas
@@ -503505,7 +503431,6 @@ ozonos
 ozonosfera
 ozonosferas
 p
-pa
 pabellon
 pabellón
 pabellones
@@ -510952,8 +510877,6 @@ pároli
 parolina
 parolinas
 parolis
-paron
-parón
 parones
 paronima
 parónima
@@ -514720,7 +514643,6 @@ pazpuerco, ca
 pazpuercos
 pche
 pchs
-PCR
 pe
 pea
 peais
@@ -517273,7 +517195,6 @@ pelvianas
 pelviano
 pelviano, na
 pelvianos
-pélvica
 pélvico
 pelvimetro
 pelvímetro
@@ -518549,7 +518470,6 @@ per accidens
 per cápita
 per istam
 per se
-per-
 pera
 perada
 peradas
@@ -523303,7 +523223,6 @@ pesuña
 pesuñas
 pesuño
 pesuños
-PET
 peta
 peta-
 petaba
@@ -523863,7 +523782,6 @@ pezuelo
 pezuelos
 pezuña
 pezuñas
-pH
 pi
 pia
 pía
@@ -525062,8 +524980,6 @@ pictorico
 pictórico
 pictórico, ca
 pictoricos
-picu
-picú
 picual
 picuala
 picualas
@@ -527753,8 +527669,6 @@ piretología
 piretologias
 piretro
 piretros
-pirex
-pírex
 pirexia
 pirexias
 pirgano
@@ -531398,7 +531312,6 @@ plesiosaurio
 plesiosaurios
 plesiosauro
 plesiosauros
-plesta
 pletina
 pletinas
 pletora
@@ -531676,7 +531589,6 @@ plugo
 pluguiera
 pluguiere
 pluguiese
-plum
 pluma
 plumada
 plumadas
@@ -531928,9 +531840,7 @@ plúrima
 plurimas
 plurimembre
 plurimembres
-plurimo
-plúrimo
-plúrimo, ma
+plúrima
 plurimos
 plurinacional
 plurinacionales
@@ -542759,7 +542669,6 @@ pretorio, ria
 pretorios
 pretura
 preturas
-preu
 preuniversitaria
 preuniversitario
 preuniversitario, ria
@@ -550931,7 +550840,6 @@ pumpuneemos
 pumpuneen
 pumpunees
 pumpuneo
-pun
 puna
 puna1
 puna2
@@ -552448,7 +552356,6 @@ PVC
 pyme
 pymes
 q
-qu
 quad
 quadrivium
 quadrívium
@@ -552873,7 +552780,6 @@ quekchí
 quelachina
 quelachinas
 quelación
-quelador
 queladora
 quelante
 quelato
@@ -553487,8 +553393,6 @@ quijeros
 quijinicuil
 quijinicuiles
 quijo
-quijon
-quijón
 quijones
 quijongo
 quijongos
@@ -553570,7 +553474,6 @@ quilates
 quilato
 quilete
 quiletes
-quili-
 quiliarea
 quiliárea
 quiliareas
@@ -554546,7 +554449,6 @@ quiritario, ria
 quiritarios
 quirite
 quirites
-quiro-
 quirofano
 quirófano
 quirofanos
@@ -555671,7 +555573,6 @@ radarista
 radaristas
 radas
 rades
-radi-
 radia
 radiaba
 radiabais
@@ -558371,7 +558272,6 @@ rasel
 raseles
 rasemos
 rasen
-raseo
 rasera
 raseras
 rasero
@@ -559760,7 +559660,6 @@ razonemos
 razonen
 razones
 razono
-RDSI
 re
 re-
 rea
@@ -593098,7 +592997,6 @@ retueste
 retuesten
 retuestes
 retuesto
-retuitea
 retuiteaba
 retuiteabais
 retuiteabamos
@@ -595921,7 +595819,6 @@ rezurzamos
 rezurzan
 rezurzas
 rezurzo
-Rh
 ria
 ría
 riacho
@@ -596412,7 +596309,6 @@ rijadores
 rijais
 rijamos
 rijan
-rijar
 rijas
 rijiosa
 rijiosas
@@ -600763,7 +600659,6 @@ rozon
 rozón
 rozones
 rozos
-rr
 rua
 rúa
 ruaba
@@ -609168,7 +609063,6 @@ secones
 secos
 secoya
 secoyas
-secre
 secrecion
 secreción
 secreciones
@@ -611879,10 +611773,7 @@ señasen
 señases
 señaste
 señasteis
-señe
-señeis
 señemos
-señen
 señera
 señeramente
 señeras
@@ -611890,7 +611781,6 @@ señero
 señero1, ra
 señero2, ra
 señeros
-señes
 seño
 señolea
 señoleaba
@@ -612778,7 +612668,6 @@ sermones
 sermonical
 serna
 sernas
-sero-
 seroconversión
 serodiagnostico
 serodiagnóstico
@@ -613780,7 +613669,6 @@ sexabamos
 sexaban
 sexabas
 sexad
-sexada
 sexadas
 sexado
 sexador
@@ -615554,7 +615442,6 @@ silvosas
 silvoso
 silvoso, sa
 silvosos
-sim
 sima
 simada
 simadas
@@ -627370,7 +627257,6 @@ soules
 souvenir
 soviet
 sóviet
-sóviete
 sovietica
 soviética
 sovieticas
@@ -637867,7 +637753,6 @@ taquerias
 taquero
 taqueros
 taques
-taqui-
 taquicardia
 taquicardias
 taquichuela
@@ -648258,7 +648143,6 @@ tlaxcalteca
 tlaxcaltecas
 tlazol
 tlazoles
-TNT
 to
 toa
 toaba
@@ -664839,7 +664723,6 @@ tuitearais
 tuitearamos
 tuitearan
 tuitearas
-tuiteare
 tuiteareis
 tuitearemos
 tuitearen
@@ -664858,7 +664741,6 @@ tuiteasen
 tuiteases
 tuiteaste
 tuiteasteis
-tuitee
 tuiteeis
 tuiteemos
 tuiteen
@@ -664882,7 +664764,6 @@ tul2
 tula
 tular
 tulares
-tulas
 tulcaneña
 tulcaneñas
 tulcaneño
@@ -665459,7 +665340,6 @@ tunero1, ra
 tunero2, ra
 tuneros
 tunes
-Túnez
 tungra
 tungras
 tungro
@@ -665528,7 +665408,6 @@ tupayas
 tupe
 tupé
 tupen
-túper
 tupes
 tupi
 tupí
@@ -668409,7 +668288,6 @@ uperizabas
 uperizacion
 uperización
 uperizaciones
-uperizad
 uperizada
 uperizadas
 uperizado
@@ -671732,7 +671610,6 @@ vaquillona
 vaquillonas
 vaquiruela
 vaquiruelas
-VAR
 vara
 varaba
 varabais
@@ -677699,7 +677576,6 @@ viguesas
 vigueses
 vigueta
 viguetas
-VIH
 vihuela
 vihuelas
 vihuelista
@@ -680141,7 +680017,6 @@ vivones
 vivos
 viyela
 viyelas
-viz-
 vizcacalis
 vizcacha
 vizcachas
@@ -681835,7 +681710,6 @@ xecudas
 xecudo
 xecudo, da
 xecudos
-xeine
 xenismo
 xenismos
 xeno-
@@ -682005,7 +681879,6 @@ xi
 xicaque
 xicaques
 xidero, ra
-xies
 xifoidea
 xifoideas
 xifoideo
@@ -682212,7 +682085,6 @@ yaichihue
 yaichihues
 yaicuaje
 yaicuajes
-yainero
 yaiti
 yaití
 yaities
@@ -682743,7 +682615,6 @@ yeyuno
 yeyunos
 yezgo
 yezgos
-yi
 yibutiana
 yibutianas
 yibutiano
@@ -682761,7 +682632,6 @@ yina
 yinas
 yincana
 yines
-yip
 yips
 yira
 yiras
@@ -684874,7 +684744,7 @@ zancudos
 zandia
 zandía
 zandias
-zando, da
+zanda
 zanfona
 zanfonas
 zanfonia
@@ -688378,3 +688248,8 @@ zuzon
 zuzón
 zuzones
 zuzujano
+candares
+cañare
+deses
+leñase
+roño

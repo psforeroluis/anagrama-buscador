@@ -18,7 +18,7 @@ check('apertura: mejor = ACTRIZ 34', r.data[0].word==='actriz'&&r.data[0].score=
 // 2. medio juego + puntuación conocida
 const b=empty(); b[7]='.......casa....';
 r=send({type:'solveBoard',payload:{board:b,blanksBoard:zeros,rack:'oleprn',blanks:0,limit:3000,rankBy:'score'}});
-check('medio juego: 923 jugadas', r.total===923, String(r.total));
+check('medio juego: 774 jugadas con el diccionario depurado', r.total===774, String(r.total));
 check('medio juego: mejor 40 puntos', r.data[0].score===40, `${r.data[0].word} ${r.data[0].score}`);
 
 // 3. bingo con bonus 35
@@ -36,7 +36,7 @@ const palabrasDe=(m)=>{ const g=b.map(x=>x.split('')); for(const t of m.tiles) g
   const out=new Set(); const rec=get=>{ for(let a=0;a<15;a++){ let w=''; for(let bb=0;bb<15;bb++){ const ch=get(a,bb);
     if(ch!=='.') w+=ch; else { if(w.length>1) out.add(w); w=''; } } if(w.length>1) out.add(w); } };
   rec((x,y)=>g[x][y]); rec((y,x)=>g[x][y]); out.delete('casa'); return [...out]; };
-for (const veto of [['an'],['casan'],['an','casan','pelon']]) {
+for (const veto of [['el'],['casan'],['el','casan','pelon']]) {
   const res=send({type:'solveBoard',payload:{board:b,blanksBoard:zeros,rack:'oleprn',blanks:0,limit:3000,blocked:veto}});
   const set=new Set(veto);
   check(`veto ${JSON.stringify(veto)}`, !res.data.some(m=>palabrasDe(m).some(w=>set.has(w))), `${res.total} jugadas`);
@@ -94,13 +94,13 @@ check('checkWords devuelve solo las desconocidas',
       lote.requestId===7&&JSON.stringify(lote.unknown)===JSON.stringify(['xqzpl']),
       JSON.stringify(lote.unknown));
 
-// vetar una de dos letras tiene que limpiar sus cruzadas
-const conAM=send({type:'solveBoard',payload:{board:b,blanksBoard:zeros,rack:'moretil',blanks:0,limit:5000}});
-const sinAM=send({type:'solveBoard',payload:{board:b,blanksBoard:zeros,rack:'moretil',blanks:0,limit:5000,blocked:['am']}});
-const formanAM=r=>r.data.filter(m=>palabrasDe(m).includes('am')).length;
-check('vetar AM elimina sus cruzadas',
-      formanAM(conAM)>0 && formanAM(sinAM)===0,
-      `${formanAM(conAM)} jugadas formaban AM, ahora ${formanAM(sinAM)}`);
+// Vetar una palabra válida de dos letras tiene que limpiar sus cruzadas.
+const conEL=send({type:'solveBoard',payload:{board:b,blanksBoard:zeros,rack:'moretil',blanks:0,limit:5000}});
+const sinEL=send({type:'solveBoard',payload:{board:b,blanksBoard:zeros,rack:'moretil',blanks:0,limit:5000,blocked:['el']}});
+const formanEL=r=>r.data.filter(m=>palabrasDe(m).includes('el')).length;
+check('vetar EL elimina sus cruzadas',
+      formanEL(conEL)>0 && formanEL(sinEL)===0,
+      `${formanEL(conEL)} jugadas formaban EL, ahora ${formanEL(sinEL)}`);
 
 // 7. atril vacío no rompe
 r=send({type:'solveBoard',payload:{board:empty(),blanksBoard:zeros,rack:'',blanks:0}});

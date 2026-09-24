@@ -42,8 +42,11 @@ export const isValidGame = (g: unknown): g is Game => {
         && Number.isFinite(x.createdAt) && Number.isFinite(x.updatedAt)
         && !!x.board && Array.isArray(x.board.letters) && Array.isArray(x.board.blanks)
         && x.board.letters.length === BOARD_SIZE && x.board.blanks.length === BOARD_SIZE
-        && x.board.letters.every(r => typeof r === 'string' && r.length === BOARD_SIZE)
-        && x.board.blanks.every(r => typeof r === 'string' && r.length === BOARD_SIZE);
+        && /^[a-zñ]*$/i.test(x.rack)
+        && x.board.letters.every(r => typeof r === 'string' && /^[.a-zñ]{15}$/.test(r))
+        && x.board.blanks.every((r, row) => typeof r === 'string'
+            && /^[01]{15}$/.test(r)
+            && [...r].every((flag, col) => flag !== '1' || x.board.letters[row][col] !== '.'));
 };
 
 // --- Backend IndexedDB ---
@@ -90,10 +93,11 @@ const readFallback = (): Game[] => {
 };
 
 const writeFallback = (games: Game[]) => {
-    try { localStorage.setItem(FALLBACK_KEY, JSON.stringify(games)); } catch { /* sin cuota */ }
+    localStorage.setItem(FALLBACK_KEY, JSON.stringify(games));
 };
 
-let useFallback = false;
+let useFallback = (() => { try { return localStorage.getItem(FALLBACK_KEY) !== null; } catch { return false; } })();
+let snapshot: Game[] = [];
 
 const byRecent = (a: Game, b: Game) => b.updatedAt - a.updatedAt;
 
@@ -101,39 +105,57 @@ export const listGames = async (): Promise<Game[]> => {
     if (!useFallback) {
         try {
             const all = await tx<Game[]>('readonly', s => s.getAll() as IDBRequest<Game[]>);
-            return all.filter(isValidGame).sort(byRecent);
+            snapshot = all.filter(isValidGame).sort(byRecent);
+            return snapshot;
         } catch {
             useFallback = true;
         }
     }
-    return readFallback().sort(byRecent);
+    const merged = new Map(snapshot.map(game => [game.id, game]));
+    for (const game of readFallback()) merged.set(game.id, game);
+    snapshot = [...merged.values()].sort(byRecent);
+    return snapshot;
 };
 
-export const saveGame = async (game: Game): Promise<void> => {
+let writes: Promise<void> = Promise.resolve();
+const enqueueWrite = (operation: () => Promise<void>): Promise<void> => {
+    const next = writes.then(operation);
+    writes = next.catch(() => {});
+    return next;
+};
+
+export const saveGame = (game: Game): Promise<void> => enqueueWrite(async () => {
     const record = { ...game, updatedAt: Date.now() };
     if (!useFallback) {
         try {
             await tx('readwrite', s => s.put(record));
+            snapshot = [...snapshot.filter(g => g.id !== record.id), record];
             return;
         } catch {
             useFallback = true;
         }
     }
-    const games = readFallback().filter(g => g.id !== record.id);
-    writeFallback([...games, record]);
-};
+    const games = new Map(snapshot.map(g => [g.id, g]));
+    for (const stored of readFallback()) games.set(stored.id, stored);
+    games.set(record.id, record);
+    writeFallback([...games.values()]);
+    snapshot = [...games.values()];
+});
 
-export const deleteGame = async (id: string): Promise<void> => {
+export const deleteGame = (id: string): Promise<void> => enqueueWrite(async () => {
     if (!useFallback) {
         try {
             await tx('readwrite', s => s.delete(id));
+            snapshot = snapshot.filter(g => g.id !== id);
             return;
         } catch {
             useFallback = true;
         }
     }
-    writeFallback(readFallback().filter(g => g.id !== id));
-};
+    const games = (await listGames()).filter(g => g.id !== id);
+    writeFallback(games);
+    snapshot = games;
+});
 
 export const getActiveId = (): string | null => {
     try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }

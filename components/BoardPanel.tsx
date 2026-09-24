@@ -101,6 +101,8 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
             onShowToast(added > 0
                 ? `${added} ${added === 1 ? 'palabra nueva detectada' : 'palabras nuevas detectadas'}`
                 : 'No se encontraron palabras nuevas');
+        } catch (error) {
+            onShowToast(error instanceof Error ? error.message : 'No se pudo revisar el tablero');
         } finally {
             setCheckingWords(false);
         }
@@ -120,6 +122,8 @@ const BoardPanel: React.FC<BoardPanelProps> = ({
             onShowToast(total > 0
                 ? `Aplicado: ${applied.additions} altas · ${applied.removals} bajas`
                 : 'El diccionario aún no contiene los cambios pendientes');
+        } catch (error) {
+            onShowToast(error instanceof Error ? error.message : 'No se pudieron comprobar los cambios');
         } finally {
             setVerifyingMaintenance(false);
         }

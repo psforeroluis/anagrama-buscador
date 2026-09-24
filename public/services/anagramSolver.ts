@@ -1128,11 +1128,6 @@ self.onmessage = (event) => {
         }
     } catch (e) {
         console.error('Error in worker:', e);
-        self.postMessage({
-            type: type === 'solveBoard' ? 'boardResult' : 'result',
-            data: [],
-            total: 0,
-            requestId,
-        });
+        self.postMessage({ type: 'error', requestId, operation: type });
     }
 };

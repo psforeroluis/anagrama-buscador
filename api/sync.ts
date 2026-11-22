@@ -57,8 +57,9 @@ const parseDoc = (text: string): { schemaVersion: number; games: Record<string, 
 };
 
 /**
- * Vercel convierte el ETag en uno débil (`W/"..."`) cuando comprime la respuesta, y el
- * navegador lo devuelve así. El contenido es el mismo, así que se compara sin el prefijo.
+ * El ETag puede llegar débil (`W/"..."`): Vercel lo debilita al comprimir la respuesta, y con
+ * documentos de cierto tamaño el almacén ya lo entrega así. El contenido es el mismo, así que
+ * siempre se compara sin el prefijo, en las dos direcciones.
  */
 const strongEtag = (value: string | null): string | null => value?.trim().replace(/^W\//, '') ?? null;
 
@@ -77,7 +78,7 @@ export default {
             if (request.method === 'GET') {
                 const current = await readBlobText(PATH);
                 if (!current) return json(404, { error: 'empty' });
-                if (strongEtag(request.headers.get('if-none-match')) === current.etag) {
+                if (strongEtag(request.headers.get('if-none-match')) === strongEtag(current.etag)) {
                     return new Response(null, { status: 304, headers: { 'Cache-Control': 'no-store', ETag: current.etag } });
                 }
                 return new Response(current.text, {
@@ -107,7 +108,7 @@ export default {
             // crear solo si no existe; sobrescribir solo con el ETag leído.
             const existing = await readBlobText(PATH);
             if (!ifMatch && existing) return json(412, { error: 'conflict' });
-            if (ifMatch && (!existing || existing.etag !== ifMatch)) return json(412, { error: 'conflict' });
+            if (ifMatch && (!existing || strongEtag(existing.etag) !== ifMatch)) return json(412, { error: 'conflict' });
 
             // Versión previa como red de seguridad (mejor esfuerzo: si falla, no impide guardar).
             try {
@@ -120,7 +121,8 @@ export default {
 
             const written = await put(PATH, body, {
                 access: 'private', addRandomSuffix: false, contentType: 'application/json', ...STORE,
-                ...(ifMatch ? { allowOverwrite: true, ifMatch } : { allowOverwrite: false }),
+                // Al almacén se le pasa su propio ETag (con el formato que él usa), no el que llegó del cliente.
+                ...(existing && ifMatch ? { allowOverwrite: true, ifMatch: existing.etag } : { allowOverwrite: false }),
             });
             const etag = (written as { etag?: string }).etag ?? (await head(PATH, STORE)).etag;
             return json(200, { etag }, { ETag: etag });

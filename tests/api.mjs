@@ -23,7 +23,7 @@ try {
             if (f && !opts.allowOverwrite) throw new Error('This blob already exists');
             if (f && opts.ifMatch && opts.ifMatch !== f.etag) throw new BlobPreconditionFailedError('stale');
             if (globalThis.__blobRace && path === 'anagrama-sync.json') { globalThis.__blobRace = false; throw new Error('Vercel Blob: The conditional request cannot succeed due to a conflicting operation against this resource.'); }
-            const etag = '"v' + (++version) + '"';
+            const etag = (globalThis.__weakEtags ? 'W/' : '') + '"v' + (++version) + '"';
             files.set(path, { text, etag });
             return { etag };
         };`;
@@ -70,7 +70,7 @@ try {
     assert.equal(JSON.parse(files.get('anagrama-sync.prev.json').text).games.a.rev, 1);
     assert.equal((await call('GET', { headers: { 'If-None-Match': etag1 } })).status, 200, 'con ETag viejo devuelve el documento');
 
-    const etag2 = res.headers.get('ETag');
+    let etag2 = res.headers.get('ETag');
     assert.equal((await call('PUT', { headers: { 'If-Match': etag2 }, body: JSON.stringify({ schemaVersion: 2, games: {} }) })).status, 400);
     res = await call('PUT', { headers: { 'If-Match': etag2 }, body: JSON.stringify({ schemaVersion: 2, games: {} }) });
     assert.deepEqual(await res.json(), { error: 'schema' }, 'otro schemaVersion: 400 schema');
@@ -82,6 +82,21 @@ try {
     const big = doc(game('a', 2, { pad: 'x'.repeat(1_100_000) }));
     assert.equal((await call('PUT', { headers: { 'If-Match': etag2 }, body: big })).status, 413, 'más de 1 MB: 413');
     assert.equal((await call('PUT', { headers: { 'If-Match': etag2, 'content-length': '2000000' }, body: doc(game('a', 2)) })).status, 413, 'content-length declarado de más de 1 MB: 413');
+
+    // El almacén entrega el ETag ya débil (documentos grandes): leer y subir con él debe funcionar.
+    globalThis.__weakEtags = true;
+    res = await call('PUT', { headers: { 'If-Match': etag2 }, body: doc(game('a', 2)) });
+    assert.equal(res.status, 200, 'cambiar a ETags débiles');
+    const weak = (await call('GET')).headers.get('ETag');
+    assert.match(weak, /^W\//, 'el almacén devuelve un ETag débil');
+    assert.equal((await call('GET', { headers: { 'If-None-Match': weak } })).status, 304, 'If-None-Match con ETag débil: 304');
+    assert.equal((await call('GET', { headers: { 'If-None-Match': weak.slice(2) } })).status, 304, 'y también sin el prefijo');
+    res = await call('PUT', { headers: { 'If-Match': weak }, body: doc(game('a', 3)) });
+    assert.equal(res.status, 200, 'subida con el ETag débil recién leído');
+    res = await call('PUT', { headers: { 'If-Match': weak.slice(2) }, body: doc(game('a', 4)) });
+    assert.equal(res.status, 412, 'un ETag viejo sigue dando 412');
+    globalThis.__weakEtags = false;
+    etag2 = (await call('GET')).headers.get('ETag');
 
     // Dos escrituras simultáneas: el almacén rechaza a la perdedora con "conflicting operation" y es un 412.
     globalThis.__blobRace = true;

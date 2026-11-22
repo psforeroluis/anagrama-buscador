@@ -21,7 +21,7 @@ Componentes React (TSX, Tailwind) de la interfaz. No guardan datos por su cuenta
 
 Props: `games`, `activeId`, `onSelect`, `onCreate: () => Game`, `onRename`, `onDelete`, `onExport` y las de importación.
 
-- **Orden por uso**: la lista se muestra con `sortByUsage(games)` (`services/gamesStore.ts`, semivida de 7 días), memoizada sobre `games`. Las más usadas suben; las de poco movimiento pasan al final. El buscador por nombre (sin tildes) aparece a partir de `SEARCH_FROM` partidas y filtra sobre esa lista ordenada.
+- **Orden por última acción**: la lista se muestra con `sortByRecent(games)` (`services/gamesStore.ts`), memoizada sobre `games`: la partida tocada más recientemente va primero. El buscador por nombre (sin tildes) aparece a partir de `SEARCH_FROM` partidas y filtra sobre esa lista ordenada.
 - **Diálogo de nombre al crear**: "Nueva partida" llama a `onCreate()`, que en `App.tsx` ya crea, guarda y abre la partida con el nombre por defecto (`nextGameName`) y la devuelve. Después se abre un diálogo (`Overlay`) con el nombre propuesto seleccionado:
   - "Guardar nombre" (Enter): recorta el texto, lo limita a 40 caracteres y llama a `onRename` solo si no está vacío y difiere del defecto.
   - "Dejar «nombre»", Escape o cerrar el overlay: conserva el nombre por defecto.

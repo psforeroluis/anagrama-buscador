@@ -26,16 +26,15 @@ try {
     assert.equal((await api.listGames()).find(g => g.id === first.id).rack, 'casa');
     const now = Date.now();
     const day = 86_400_000;
-    const busy = { ...first, uses: 40, updatedAt: now };
-    const abandoned = { ...first, id: 'a', uses: 40, updatedAt: now - 60 * day };
-    const idle = { ...first, id: 'b', uses: 0, updatedAt: now - 20 * day };
-    const order = api.sortByUsage([idle, abandoned, busy], now).map(g => g.id);
-    assert.equal(order[0], busy.id, 'la partida muy usada y reciente va primero');
-    assert.equal(order[2], 'a', 'la abandonada hace meses va a la cola aunque se jugara mucho');
-    assert.ok(api.usageScore({ ...first, uses: 0, updatedAt: now }, now) > api.usageScore({ ...first, uses: 0, updatedAt: now - 30 * day }, now),
-        'a igual actividad, la reciente pesa más');
-    assert.ok(api.usageScore(idle, now) < api.usageScore({ ...first, uses: 1, updatedAt: now }, now),
-        'una partida sin movimiento y vieja queda en la cola');
+    const recent = { ...first, id: 'r', uses: 0, updatedAt: now };
+    const older = { ...first, id: 'o', uses: 99, updatedAt: now - 20 * day };
+    const oldest = { ...first, id: 'x', uses: 99, updatedAt: now - 60 * day };
+    assert.deepEqual(api.sortByRecent([oldest, recent, older]).map(g => g.id), ['r', 'o', 'x'],
+        'la última acción va primero, aunque otra se haya jugado mucho más');
+    const opened = { ...older, lastUsedAt: now + 1000 };
+    assert.equal(api.sortByRecent([recent, opened])[0].id, 'o', 'abrir una partida en este aparato la sube');
+    assert.equal(api.lastActionAt({ ...older, lastUsedAt: undefined }), older.updatedAt, 'sin lastUsedAt cuenta la última edición');
+    assert.equal(api.lastActionAt({ ...older, lastUsedAt: older.updatedAt - 5 }), older.updatedAt, 'una edición remota más nueva también cuenta');
     const backup = game => JSON.stringify({ format: 'anagrama-backup', version: 1, games: [game] });
     assert.equal(api.isValidGame({ ...first, board: { ...first.board, letters: ['x'.repeat(15), ...first.board.letters.slice(1)] } }), true);
     assert.equal(api.isValidGame({ ...first, board: { ...first.board, letters: ['!'.repeat(15), ...first.board.letters.slice(1)] } }), false,

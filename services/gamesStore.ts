@@ -3,7 +3,7 @@
 // privado, permisos— cae a localStorage sin que la UI se entere.
 
 import { BoardState } from '../types';
-import { BOARD_SIZE, countTiles, emptyBoard } from './boardLayout';
+import { BOARD_SIZE, emptyBoard } from './boardLayout';
 import { logError } from './sync/diagnostics';
 import { TOMBSTONE_MS } from './sync/constants';
 
@@ -339,24 +339,16 @@ const runInit = async (): Promise<Game[]> => {
     return games;
 };
 
-const HALF_LIFE_DAYS = 7;
-
 /**
- * Cuánto se está usando una partida: su actividad acumulada, que se reduce a
- * la mitad por cada semana sin tocarla. Una partida muy jugada pero abandonada
- * acaba por debajo de una reciente con poco movimiento.
- * Las partidas antiguas sin contador usan sus fichas colocadas como estimación.
+ * Hora de la última acción sobre una partida: la más reciente entre abrirla o editarla en
+ * este aparato (`lastUsedAt`) y su última edición, también la hecha desde otro aparato
+ * (`updatedAt`). Es la misma hora que muestra la lista como "hace X".
  */
-export const usageScore = (game: Game, now = Date.now()): number => {
-    const activity = game.uses ?? countTiles(game.board.letters);
-    const days = Math.max(0, now - game.updatedAt) / 86_400_000;
-    return (1 + activity) * Math.pow(0.5, days / HALF_LIFE_DAYS);
-};
+export const lastActionAt = (game: Game): number => Math.max(game.lastUsedAt ?? 0, game.updatedAt);
 
-/** Más usadas primero; las de poco movimiento pasan a la cola. */
-export const sortByUsage = (games: Game[], now = Date.now()): Game[] =>
-    [...games].sort((a, b) =>
-        usageScore(b, now) - usageScore(a, now) || b.updatedAt - a.updatedAt);
+/** La última acción primero; a igual hora, la creada más tarde. */
+export const sortByRecent = (games: Game[]): Game[] =>
+    [...games].sort((a, b) => lastActionAt(b) - lastActionAt(a) || b.createdAt - a.createdAt);
 
 /** Nombre libre para la siguiente partida: "Partida 3" si ya existen 1 y 2. */
 export const nextGameName = (games: Game[]): string => {

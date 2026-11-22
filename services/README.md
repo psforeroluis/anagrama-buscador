@@ -26,9 +26,9 @@ Lógica de la app sin React: persistencia, copias de seguridad, lectura de captu
 
 - `createGame` crea la partida con `uses: 0`.
 - `App.tsx` suma 1 a `uses` y actualiza `updatedAt` cada vez que se edita la partida activa y cada vez que se abre otra (abrir cuenta como usar). Las partidas antiguas sin `uses` se tratan como `0` al incrementarlas.
-- `usageScore(game, now)` = `(1 + actividad) * 0.5^(días / 7)`, donde `actividad` es `uses` o, si falta, las fichas colocadas en el tablero (`countTiles`), y `días` son los transcurridos desde `updatedAt`. La semivida es de 7 días (`HALF_LIFE_DAYS`): una partida muy jugada pero abandonada acaba por debajo de una reciente con poco movimiento.
-- `sortByUsage(games, now)` devuelve una copia ordenada de mayor a menor puntuación; el desempate es `updatedAt` descendente. No muta la entrada. `now` es inyectable para pruebas.
-- `listGames` sigue devolviendo las partidas por `updatedAt` descendente; el orden por uso se aplica solo en la UI (`components/GameSwitcher.tsx`).
+- `lastActionAt(game)` es el máximo entre `lastUsedAt` (abrir o editar en este aparato) y `updatedAt` (última edición, también desde otro aparato): la misma hora que muestra la lista como "hace X".
+- `sortByRecent(games)` devuelve una copia ordenada con la última acción primero; el desempate es `createdAt` descendente. No muta la entrada.
+- `listGames` sigue devolviendo las partidas por `updatedAt` descendente; el orden por última acción se aplica solo en la UI (`components/GameSwitcher.tsx`).
 - `nextGameName(games)` propone el primer "Partida N" libre.
 
 ### Invariantes y efectos
@@ -39,4 +39,4 @@ Lógica de la app sin React: persistencia, copias de seguridad, lectura de captu
 
 ## Pruebas
 
-`npm test` ejecuta `tests/`; `tests/persistence.mjs` cubre `gamesStore.ts` (incluidos `usageScore` y `sortByUsage`) y `backup.ts`. `npm run typecheck` comprueba tipos.
+`npm test` ejecuta `tests/`; `tests/persistence.mjs` cubre `gamesStore.ts` (incluidos `lastActionAt` y `sortByRecent`) y `backup.ts`. `npm run typecheck` comprueba tipos.

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Game, sortByUsage } from '../services/gamesStore';
+import { Game, sortByRecent } from '../services/gamesStore';
 import { countTiles } from '../services/boardLayout';
 import Overlay from './Overlay';
 import SyncStatusChip from './SyncStatusChip';
@@ -62,8 +62,8 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({
     const [naming, setNaming] = useState<Game | null>(null);
     const [newName, setNewName] = useState('');
 
-    // Las más usadas arriba; las de poco movimiento se hunden hacia el final.
-    const ordered = useMemo(() => sortByUsage(games), [games]);
+    // La última acción primero: la partida que acabas de tocar queda arriba.
+    const ordered = useMemo(() => sortByRecent(games), [games]);
     const showSearch = games.length >= SEARCH_FROM;
     const needle = foldText(query.trim());
     const visible = needle
@@ -274,7 +274,7 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({
             </button>
 
             <p className="text-[11px] text-brand-subtle/50 mt-2 ml-1">
-                Cada partida guarda su tablero y su atril. Las más usadas suben; las de poco movimiento pasan al final. Doble clic en el nombre para renombrarla.
+                Cada partida guarda su tablero y su atril. La que tocaste más recientemente va primero. Doble clic en el nombre para renombrarla.
             </p>
 
             {/* Nombre de la partida recién creada: ya existe con un nombre por

@@ -125,6 +125,8 @@ try {
         const fromPc = merge([a], { a: b }).conflicts[0];
         const fromPhone = merge([{ ...b, syncedRev: 1 }], { a: stripLocal(a) }).conflicts[0];
         assert.equal(fromPc.id, fromPhone.id, 'mismo id de copia desde cualquier aparato');
+        assert.equal(fromPc.id, 'a-conflicto-2-phone', 'id de la copia: <id>-conflicto-<rev perdedora>-<editedBy perdedora>');
+        assert.equal(fromPc.editedBy, 'phone', 'editedBy de la copia = el de la perdedora');
         assert.equal(fromPc.editedBy, fromPhone.editedBy);
         assert.equal(fromPc.rev, 1);
         assert.equal(fromPc.syncedRev, undefined);
@@ -257,6 +259,7 @@ try {
         let stored = { enabled: false, token: '', etag: null, lastSyncedAt: null, firstSyncDone: false };
         const store = {
             async listAll() { return [...games.values()].map(clone); },
+            async purge(ids) { for (const id of ids) games.delete(id); },
             async save(g, origin) {
                 games.set(g.id, origin === 'edit' ? { ...clone(g), rev: revOf(g) + 1, editedBy: name } : clone(g));
             },
@@ -283,6 +286,18 @@ try {
         assert.ok(srv.doc.games.a, 'el servidor recibió la partida');
         assert.equal(pc.games.get('a').syncedRev, 1, 'la partida quedó confirmada');
         assert.equal(pc.engine.getMeta().firstSyncDone, true);
+    }
+    {   // El servidor purgó una lápida que este aparato ya había subido: se elimina, sin resubirla.
+        const srv = fakeServer(), pc = fakeDevice('pc', srv);
+        addGame(pc, 'a'); addGame(pc, 'old');
+        await pc.engine.enable('secreto');
+        pc.games.set('old', { ...pc.games.get('old'), deletedAt: 1, rev: 2, syncedRev: 2 });
+        delete srv.doc.games.old;
+        const pushes = srv.pushes;
+        await pc.engine.sync();
+        assert.equal(pc.games.has('old'), false, 'la lápida que el servidor ya no tiene se elimina en local');
+        assert.equal(srv.doc.games.old, undefined, 'y no se vuelve a subir');
+        assert.equal(srv.pushes, pushes, 'sin subidas nuevas');
     }
     {   // Dos aparatos convergen, y desactivar no borra partidas.
         const srv = fakeServer(), pc = fakeDevice('pc', srv), phone = fakeDevice('phone', srv);

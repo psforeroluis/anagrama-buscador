@@ -20,7 +20,9 @@ export interface SyncState {
 
 export interface SyncStore {
     listAll(): Promise<Game[]>;
-    save(game: Game, origin: SaveOrigin): Promise<void>;
+    save(game: Game, origin: SaveOrigin): Promise<unknown>;
+    /** Elimina del todo estas lápidas (las que el servidor ya purgó). */
+    purge(ids: string[]): Promise<void>;
 }
 
 export interface SyncMeta {
@@ -100,9 +102,21 @@ export const createSyncEngine = (deps: SyncEngineDeps) => {
             const remote = pulled.status === 'ok' ? pulled.doc.games : null;
             const etag = pulled.status === 'ok' ? pulled.etag : undefined;
 
-            const local = await deps.store.listAll();
+            let local = await deps.store.listAll();
+            if (remote) {
+                // El servidor purga las lápidas vencidas. Una lápida que este aparato ya subió
+                // (`syncedRev > 0`) y que ya no está en el servidor se elimina aquí; si no, la
+                // fusión la volvería a subir y el servidor a purgarla, sin fin.
+                const purged = local.filter(g => g.deletedAt !== undefined && (g.syncedRev ?? 0) > 0 && !remote[g.id]);
+                if (purged.length > 0) {
+                    await deps.store.purge(purged.map(g => g.id));
+                    const gone = new Set(purged.map(g => g.id));
+                    local = local.filter(g => !gone.has(g.id));
+                }
+            }
             const result = merge(local, remote);
-            for (const g of result.toLocal) await deps.store.save(g, 'remote');
+            const copies = new Set(result.conflicts.map(g => g.id));
+            for (const g of result.toLocal) await deps.store.save(g, copies.has(g.id) ? 'copy' : 'remote');
             notices.push(...result.notices);
 
             if (!result.needsPush) { saveMeta({ etag: etag ?? meta.etag }); return notices; }

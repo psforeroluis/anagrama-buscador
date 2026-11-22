@@ -1,7 +1,7 @@
 // Motor de sincronización ya cableado con el almacén real, `localStorage` y `fetch`.
 // La interfaz usa solo este módulo: `syncEngine` y `subscribeSync`.
 
-import { listAllGames, saveGame } from '../gamesStore';
+import { listAllGames, purgeDeleted, saveGame } from '../gamesStore';
 import { buildBackup } from '../backup';
 import { createSyncEngine, type SyncMeta, type SyncState } from './syncEngine';
 import { httpTransport } from './syncTransport';
@@ -21,7 +21,7 @@ const loadMeta = (): SyncMeta => {
 const listeners = new Set<(state: SyncState) => void>();
 
 export const syncEngine = createSyncEngine({
-    store: { listAll: listAllGames, save: saveGame },
+    store: { listAll: listAllGames, save: saveGame, purge: ids => purgeDeleted(Date.now(), ids) },
     meta: {
         load: loadMeta,
         save: meta => { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch { /* sin cuota */ } },

@@ -6,7 +6,7 @@
 //  - Si solo cambió un lado, gana ese lado.
 //  - Si cambiaron los dos: borrado frente a edición, gana la edición; dos ediciones,
 //    gana la `rev` más alta (empate: `editedBy` menor) y la perdedora se conserva
-//    como "Nombre (conflicto)" con id determinista.
+//    como "Nombre (conflicto)" con id determinista (cadena).
 //  - Nunca se borra una partida local por no estar en el servidor.
 
 import type { Game } from '../gamesStore';
@@ -40,41 +40,29 @@ export const stripLocal = (g: Game): Game => {
 export const hasPending = (g: Game): boolean =>
     g.syncedRev === undefined || revOf(g) > g.syncedRev;
 
-/** Hash de 53 bits (cyrb53), síncrono y estable entre aparatos. */
-const hash53 = (text: string): string => {
-    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
-    for (let i = 0; i < text.length; i++) {
-        const c = text.charCodeAt(i);
-        h1 = Math.imul(h1 ^ c, 2654435761);
-        h2 = Math.imul(h2 ^ c, 1597334677);
-    }
-    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
-};
-
 const sameContent = (a: Game, b: Game): boolean =>
     a.name === b.name && a.rack === b.rack && a.blanks === b.blanks
     && a.deletedAt === b.deletedAt
     && a.board.letters.join('|') === b.board.letters.join('|')
     && a.board.blanks.join('|') === b.board.blanks.join('|');
 
-/** Gana la `rev` más alta; empate: `editedBy` menor; último recurso: hash del contenido. */
+/** Gana la `rev` más alta; empate: `editedBy` menor; último recurso: orden de texto del contenido. */
 const winner = (a: Game, b: Game): Game => {
     if (revOf(a) !== revOf(b)) return revOf(a) > revOf(b) ? a : b;
     const ea = a.editedBy ?? '', eb = b.editedBy ?? '';
     if (ea !== eb) return ea < eb ? a : b;
-    return hash53(JSON.stringify(stripLocal(a))) <= hash53(JSON.stringify(stripLocal(b))) ? a : b;
+    return JSON.stringify(stripLocal(a)) <= JSON.stringify(stripLocal(b)) ? a : b;
 };
 
 const makeConflictCopy = (loser: Game): Game => {
-    const tag = hash53(`${loser.id}|${revOf(loser)}|${loser.editedBy ?? ''}`);
     const base = loser.name.endsWith(CONFLICT_SUFFIX)
         ? loser.name
         : `${loser.name}${CONFLICT_SUFFIX}`;
     const { syncedRev, deletedAt, ...rest } = loser;
     void syncedRev; void deletedAt;
-    return { ...rest, id: `${loser.id}-c${tag}`, name: base, rev: 1, editedBy: `conflict:${tag}` } as Game;
+    // Id y `editedBy` son cadenas derivadas de la perdedora: dos aparatos que fusionan el
+    // mismo choque obtienen la misma copia, sin hash ni `crypto.subtle`.
+    return { ...rest, id: `${loser.id}-conflicto-${revOf(loser)}-${loser.editedBy ?? 'sin-aparato'}`, name: base, rev: 1, editedBy: loser.editedBy } as Game;
 };
 
 export const merge = (local: Game[], remote: RemoteGames | null): MergeResult => {

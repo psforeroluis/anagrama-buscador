@@ -108,7 +108,7 @@ export const restoreBackup = async (json: string): Promise<ImportSummary> => {
             ? { ...game, name, id: `${game.id}-import-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` }
             : { ...game, name };
 
-        await saveGame(record);
+        await saveGame(record, 'edit');
         existingById.set(record.id, record);
         summary.games++;
     }

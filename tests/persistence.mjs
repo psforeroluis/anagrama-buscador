@@ -75,6 +75,29 @@ try {
     await api.deleteGame(tomb.id);
     await api.purgeDeleted(Date.now() + 31 * 86_400_000);
     assert.equal((await api.listAllGames()).some(g => g.id === tomb.id), false, 'la purga elimina lápidas de más de 30 días');
+    // Partida antigua sin `rev` (cuenta como 1): la primera edición la sube a 2.
+    const legacy = api.createGame('Antigua');
+    delete legacy.rev;
+    await api.saveGame(legacy, 'remote');
+    await api.saveGame({ ...legacy, rack: 'a' }, 'edit');
+    assert.equal((await api.listAllGames()).find(g => g.id === legacy.id).rev, 2, 'rev ausente cuenta como 1 y la edición suma uno');
+    // Origen `copy`: rev 1, syncedRev 0, sin sumar.
+    const copy = { ...api.createGame('Copia (conflicto)'), rev: 7 };
+    await api.saveGame(copy, 'copy');
+    const savedCopy = (await api.listAllGames()).find(g => g.id === copy.id);
+    assert.equal(savedCopy.rev, 1, 'la copia empieza en rev 1');
+    assert.equal(savedCopy.syncedRev, 0, 'y queda pendiente');
+    // Un servidor que vuelve atrás: se conserva lo local, queda pendiente y se avisa.
+    await api.saveGame({ ...savedCopy, rev: 5, syncedRev: 5 }, 'remote');
+    const rewound = await api.saveGame({ ...savedCopy, rev: 3, syncedRev: 3 }, 'remote');
+    assert.match(rewound.notice ?? '', /versión anterior/, 'avisa de que el servidor volvió atrás');
+    assert.equal((await api.listAllGames()).find(g => g.id === copy.id).syncedRev, 0, 'y vuelve a quedar pendiente');
+    // Purga exacta por ids: elimina lápidas recientes que el servidor ya purgó.
+    const gone = api.createGame('Purgada por el servidor');
+    await api.saveGame(gone, 'edit');
+    await api.deleteGame(gone.id);
+    await api.purgeDeleted(Date.now(), [gone.id]);
+    assert.equal((await api.listAllGames()).some(g => g.id === gone.id), false, 'purgeDeleted con ids elimina esas lápidas aunque sean recientes');
     values.clear();
     globalThis.indexedDB = { open() {
         const request = {};

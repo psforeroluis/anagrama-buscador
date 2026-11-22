@@ -4,6 +4,7 @@
 
 import { BoardState } from '../types';
 import { BOARD_SIZE, countTiles, emptyBoard } from './boardLayout';
+import { logError } from './sync/diagnostics';
 
 export interface Game {
     id: string;
@@ -44,6 +45,7 @@ export const createGame = (name: string): Game => ({
     rack: '',
     blanks: 0,
     uses: 0,
+    rev: 1,
     createdAt: Date.now(),
     updatedAt: Date.now(),
 });
@@ -106,14 +108,14 @@ const readFallback = (): Game[] => {
         const raw = localStorage.getItem(FALLBACK_KEY);
         const parsed = raw ? JSON.parse(raw) : [];
         return Array.isArray(parsed) ? parsed.filter(isValidGame) : [];
-    } catch { return []; }
+    } catch (e) { logError('gamesStore.readFallback', e); return []; }
 };
 
 const writeFallback = (games: Game[]) => {
     localStorage.setItem(FALLBACK_KEY, JSON.stringify(games));
 };
 
-let useFallback = (() => { try { return localStorage.getItem(FALLBACK_KEY) !== null; } catch { return false; } })();
+let useFallback = (() => { try { return localStorage.getItem(FALLBACK_KEY) !== null; } catch (e) { logError('gamesStore.init', e); return false; } })();
 let snapshot: Game[] = [];
 
 const byRecent = (a: Game, b: Game) => b.updatedAt - a.updatedAt;
@@ -125,7 +127,8 @@ export const listAllGames = async (): Promise<Game[]> => {
             const all = await tx<Game[]>('readonly', s => s.getAll() as IDBRequest<Game[]>);
             snapshot = all.filter(isValidGame).sort(byRecent);
             return snapshot;
-        } catch {
+        } catch (e) {
+            logError('gamesStore.listAllGames', e);
             useFallback = true;
         }
     }
@@ -161,9 +164,9 @@ export const getDeviceId = (): string => {
     try {
         const stored = localStorage.getItem(DEVICE_KEY);
         if (stored) return (deviceIdCache = stored);
-    } catch { /* sin almacenamiento */ }
+    } catch (e) { logError('gamesStore.getDeviceId', e); }
     const id = newId();
-    try { localStorage.setItem(DEVICE_KEY, id); } catch { /* se queda en memoria */ }
+    try { localStorage.setItem(DEVICE_KEY, id); } catch (e) { logError('gamesStore.getDeviceId', e); }
     return (deviceIdCache = id);
 };
 
@@ -172,11 +175,13 @@ export const getDeviceId = (): string => {
  *  - edit: edición del usuario (sube `rev` y queda pendiente de subir).
  *  - usage: solo se abrió (no toca `rev` ni `updatedAt`).
  *  - remote: viene del servidor (se guarda tal cual, sin eco).
+ *  - copy: copia de conflicto creada por la fusión (`rev = 1`, `syncedRev = 0`, sin sumar).
  */
-export type SaveOrigin = 'edit' | 'usage' | 'remote';
+export type SaveOrigin = 'edit' | 'usage' | 'remote' | 'copy';
 
 const buildRecord = (game: Game, stored: Game | undefined, origin: SaveOrigin): Game => {
     if (origin === 'remote') return game;
+    if (origin === 'copy') return { ...game, rev: 1, syncedRev: 0 };
     // `rev`, `syncedRev` y las lápidas pertenecen al almacén y al motor: la copia en
     // memoria de la interfaz puede estar desfasada, así que se leen de lo guardado.
     const rev = stored?.rev ?? game.rev;
@@ -187,7 +192,7 @@ const buildRecord = (game: Game, stored: Game | undefined, origin: SaveOrigin): 
     const now = Date.now();
     return {
         ...game, syncedRev, updatedAt: now, lastUsedAt: now,
-        rev: (rev ?? 0) + 1, editedBy: getDeviceId(),
+        rev: (rev ?? 1) + 1, editedBy: getDeviceId(),
     };
 };
 
@@ -218,7 +223,8 @@ const updateGame = (id: string, compute: (stored: Game | undefined) => Game | un
                 const record = await idbUpdate(id, compute);
                 if (record) snapshot = [...snapshot.filter(g => g.id !== id), record];
                 return;
-            } catch {
+            } catch (e) {
+                logError('gamesStore.updateGame', e);
                 useFallback = true;
             }
         }
@@ -231,21 +237,45 @@ const updateGame = (id: string, compute: (stored: Game | undefined) => Game | un
         snapshot = [...games.values()];
     });
 
-export const saveGame = (game: Game, origin: SaveOrigin = 'edit'): Promise<void> =>
-    updateGame(game.id, stored => buildRecord(game, stored, origin));
+export interface SaveResult {
+    /** Aviso para el usuario (por ejemplo, un servidor que vuelve atrás). */
+    notice?: string;
+}
+
+/**
+ * Guarda una partida. El origen es obligatorio. Con `remote`, si la `rev` que llega es
+ * menor que el `syncedRev` guardado (un servidor restaurado), se conserva lo local, se
+ * marca pendiente (`syncedRev = 0`) y se devuelve un aviso.
+ */
+export const saveGame = async (game: Game, origin: SaveOrigin): Promise<SaveResult> => {
+    let notice: string | undefined;
+    await updateGame(game.id, stored => {
+        if (origin === 'remote' && stored && stored.syncedRev !== undefined && (game.rev ?? 1) < stored.syncedRev) {
+            notice = `El servidor tenía una versión anterior de «${stored.name}»; se volverá a subir.`;
+            return { ...stored, syncedRev: 0 };
+        }
+        return buildRecord(game, stored, origin);
+    });
+    return notice ? { notice } : {};
+};
 
 /** Borra con lápida: la partida se conserva con su contenido hasta purgarla. */
 export const deleteGame = (id: string): Promise<void> =>
     updateGame(id, stored => stored && stored.deletedAt === undefined
-        ? { ...stored, deletedAt: Date.now(), updatedAt: Date.now(), rev: (stored.rev ?? 0) + 1, editedBy: getDeviceId() }
+        ? { ...stored, deletedAt: Date.now(), updatedAt: Date.now(), rev: (stored.rev ?? 1) + 1, editedBy: getDeviceId() }
         : undefined);
 
 const TOMBSTONE_DAYS = 30;
 
-/** Elimina del todo las lápidas de más de 30 días (plazo provisional). */
-export const purgeDeleted = (now = Date.now()): Promise<void> => enqueueWrite(async () => {
+/**
+ * Elimina del todo las lápidas de más de 30 días (plazo provisional). Con `only`, elimina
+ * exactamente esas lápidas, sea cual sea su edad (las que el servidor ya purgó).
+ */
+export const purgeDeleted = (now = Date.now(), only?: string[]): Promise<void> => enqueueWrite(async () => {
     const limit = now - TOMBSTONE_DAYS * 86_400_000;
-    const expired = (await listAllGames()).filter(g => g.deletedAt !== undefined && g.deletedAt < limit);
+    const wanted = only ? new Set(only) : null;
+    const expired = (await listAllGames()).filter(g => g.deletedAt !== undefined
+        && (wanted ? wanted.has(g.id) : g.deletedAt < limit));
     if (expired.length === 0) return;
     const ids = new Set(expired.map(g => g.id));
     if (!useFallback) {
@@ -253,7 +283,8 @@ export const purgeDeleted = (now = Date.now()): Promise<void> => enqueueWrite(as
             for (const id of ids) await tx('readwrite', s => s.delete(id));
             snapshot = snapshot.filter(g => !ids.has(g.id));
             return;
-        } catch {
+        } catch (e) {
+            logError('gamesStore.purgeDeleted', e);
             useFallback = true;
         }
     }
@@ -263,11 +294,11 @@ export const purgeDeleted = (now = Date.now()): Promise<void> => enqueueWrite(as
 });
 
 export const getActiveId = (): string | null => {
-    try { return localStorage.getItem(ACTIVE_KEY); } catch { return null; }
+    try { return localStorage.getItem(ACTIVE_KEY); } catch (e) { logError('gamesStore.getActiveId', e); return null; }
 };
 
 export const setActiveId = (id: string) => {
-    try { localStorage.setItem(ACTIVE_KEY, id); } catch { /* sin cuota */ }
+    try { localStorage.setItem(ACTIVE_KEY, id); } catch (e) { logError('gamesStore.setActiveId', e); }
 };
 
 /**
@@ -296,14 +327,14 @@ const runInit = async (): Promise<Game[]> => {
                 const parsed = JSON.parse(legacy);
                 const candidate = { ...migrated, board: parsed.board, rack: parsed.rack ?? '', blanks: parsed.blanks ?? 0 };
                 if (isValidGame(candidate)) {
-                    await saveGame(candidate);
+                    await saveGame(candidate, 'edit');
                     localStorage.removeItem(LEGACY_BOARD_KEY);
                     return [candidate];
                 }
             }
-        } catch { /* nada que migrar */ }
+        } catch (e) { logError('gamesStore.migrarTableroAntiguo', e); }
 
-        await saveGame(migrated);
+        await saveGame(migrated, 'edit');
         games = [migrated];
     }
     return games;

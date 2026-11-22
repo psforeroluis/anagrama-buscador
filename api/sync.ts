@@ -120,10 +120,11 @@ export default {
             return json(200, { etag }, { ETag: etag });
         } catch (error) {
             // Otro aparato escribió antes, o la creación chocó con un documento ya existente.
-            // Lo segundo no está verificado contra el SDK real (ver la prueba de la fase 2b).
             if (error instanceof BlobPreconditionFailedError) return json(412, { error: 'conflict' });
             const message = error instanceof Error ? error.message : '';
-            if (/already exists/i.test(message)) return json(412, { error: 'conflict' });
+            // Dos escrituras condicionales simultáneas: el almacén rechaza a la perdedora con
+            // "conflicting operation" (comprobado en la fase 2b), que es también un choque.
+            if (/already exists|conflicting operation/i.test(message)) return json(412, { error: 'conflict' });
             // Solo nombre y mensaje del error: nunca el contenido de las partidas.
             console.error('sync: error del servidor', error instanceof Error ? `${error.name}: ${message}` : String(error));
             return json(500, { error: 'server' });

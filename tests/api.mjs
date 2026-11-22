@@ -22,6 +22,7 @@ try {
             const f = files.get(path);
             if (f && !opts.allowOverwrite) throw new Error('This blob already exists');
             if (f && opts.ifMatch && opts.ifMatch !== f.etag) throw new BlobPreconditionFailedError('stale');
+            if (globalThis.__blobRace && path === 'anagrama-sync.json') { globalThis.__blobRace = false; throw new Error('Vercel Blob: The conditional request cannot succeed due to a conflicting operation against this resource.'); }
             const etag = '"v' + (++version) + '"';
             files.set(path, { text, etag });
             return { etag };
@@ -80,6 +81,12 @@ try {
     const big = doc(game('a', 2, { pad: 'x'.repeat(1_100_000) }));
     assert.equal((await call('PUT', { headers: { 'If-Match': etag2 }, body: big })).status, 413, 'más de 1 MB: 413');
     assert.equal((await call('PUT', { headers: { 'If-Match': etag2, 'content-length': '2000000' }, body: doc(game('a', 2)) })).status, 413, 'content-length declarado de más de 1 MB: 413');
+
+    // Dos escrituras simultáneas: el almacén rechaza a la perdedora con "conflicting operation" y es un 412.
+    globalThis.__blobRace = true;
+    res = await call('PUT', { headers: { 'If-Match': etag2 }, body: doc(game('a', 2)) });
+    assert.equal(res.status, 412, 'escritura simultánea perdida: 412');
+    globalThis.__blobRace = false;
 
     // Las lápidas de más de 30 días se purgan al escribir.
     const old = Date.now() - 31 * 86_400_000;

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node tests/dictionary.mjs && node tests/regresion.mjs && node tests/persistence.mjs && node tests/sync.mjs",
+    "test": "node tests/dictionary.mjs && node tests/regresion.mjs && node tests/persistence.mjs && node tests/sync.mjs && node tests/api.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

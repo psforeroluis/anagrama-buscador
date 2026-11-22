@@ -9,12 +9,19 @@ import { httpTransport } from './syncTransport';
 const META_KEY = 'anagrama.sync.v1';
 const BACKUP_KEY = 'anagrama.preSyncBackup.v1';
 
-const defaults: SyncMeta = { enabled: false, token: '', etag: null, lastSyncedAt: null, firstSyncDone: false };
+const defaults: SyncMeta = { enabled: false, token: '', etag: null, lastSyncedAt: null, firstSyncPending: false, lastError: null };
 
 const loadMeta = (): SyncMeta => {
     try {
         const raw = localStorage.getItem(META_KEY);
-        return raw ? { ...defaults, ...JSON.parse(raw) } : { ...defaults };
+        if (!raw) return { ...defaults };
+        const stored = JSON.parse(raw);
+        // Versión anterior: `firstSyncDone` (true = ya sincronizó) pasa a `firstSyncPending`.
+        if (stored.firstSyncPending === undefined && stored.firstSyncDone !== undefined) {
+            stored.firstSyncPending = stored.enabled && !stored.firstSyncDone;
+        }
+        delete stored.firstSyncDone;
+        return { ...defaults, ...stored };
     } catch { return { ...defaults }; }
 };
 
@@ -27,6 +34,17 @@ export const syncEngine = createSyncEngine({
         save: meta => { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch { /* sin cuota */ } },
     },
     transport: httpTransport,
+    events: {
+        onVisible: callback => {
+            const listener = () => { if (document.visibilityState === 'visible') callback(); };
+            document.addEventListener('visibilitychange', listener);
+            return () => document.removeEventListener('visibilitychange', listener);
+        },
+        onOnline: callback => {
+            window.addEventListener('online', callback);
+            return () => window.removeEventListener('online', callback);
+        },
+    },
     // Una sola copia previa a la primera sincronización. Si no cabe, lanza y el motor se detiene.
     backupBeforeFirstSync: async () => {
         localStorage.setItem(BACKUP_KEY, JSON.stringify(await buildBackup()));

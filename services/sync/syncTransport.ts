@@ -10,6 +10,7 @@ export interface SyncDoc {
 
 export type PullResult =
     | { status: 'empty' }
+    | { status: 'notModified' }
     | { status: 'ok'; doc: SyncDoc; etag: string };
 
 export type PushResult =
@@ -17,7 +18,8 @@ export type PushResult =
     | { status: 'conflict' };
 
 export interface SyncTransport {
-    pull(): Promise<PullResult>;
+    /** Con `etag`, el servidor responde `notModified` si el documento no cambió desde esa lectura. */
+    pull(etag?: string): Promise<PullResult>;
     /** `etag` es el de la última lectura; sin él, el servidor solo crea si no existe. */
     push(doc: SyncDoc, etag?: string): Promise<PushResult>;
 }
@@ -53,8 +55,9 @@ export const httpTransport = (token: string, endpoint = '/api/sync'): SyncTransp
     };
 
     return {
-        async pull() {
-            const res = await request({ method: 'GET' });
+        async pull(known) {
+            const res = await request({ method: 'GET', headers: known ? { 'If-None-Match': known } : {} });
+            if (res.status === 304) return { status: 'notModified' };
             if (res.status === 404) return { status: 'empty' };
             if (!res.ok) return fail(res);
             const doc = await res.json().catch(() => null);
@@ -70,7 +73,8 @@ export const httpTransport = (token: string, endpoint = '/api/sync'): SyncTransp
             });
             if (res.status === 412) return { status: 'conflict' };
             if (!res.ok) return fail(res);
-            const next = res.headers.get('ETag');
+            const fromBody = res.headers.get('ETag') ? null : (await res.json().catch(() => null))?.etag;
+            const next = res.headers.get('ETag') ?? fromBody;
             if (!next) throw new SyncError('server', 'sin ETag');
             return { status: 'ok', etag: next };
         },

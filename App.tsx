@@ -516,23 +516,14 @@ const App: React.FC = () => {
     useEffect(() => {
         if (!gamesLoaded) return;
         if (!syncEngine.getMeta().enabled) void purgeDeleted();
-        void runSync();
-        const onVisible = () => { if (document.visibilityState === 'visible') void runSync(); };
-        const onOnline = () => { void runSync(); };
-        document.addEventListener('visibilitychange', onVisible);
-        window.addEventListener('online', onOnline);
-        return () => {
-            document.removeEventListener('visibilitychange', onVisible);
-            window.removeEventListener('online', onOnline);
-        };
+        return syncEngine.start(runSync);
     }, [gamesLoaded, runSync]);
 
     // 2 s después de una edición se envía a segundo plano.
     useEffect(() => {
         if (!syncEnabled || !activeGameId) return;
-        const timer = setTimeout(() => { void runSync(); }, 2000);
-        return () => clearTimeout(timer);
-    }, [board, boardRack, boardBlanks, activeGameId, syncEnabled, runSync]);
+        syncEngine.notifyEdit();
+    }, [board, boardRack, boardBlanks, activeGameId, syncEnabled]);
 
     const syncLabel = syncEnabled ? syncChipText(syncState, ts => {
         const mins = Math.round((Date.now() - ts) / 60000);

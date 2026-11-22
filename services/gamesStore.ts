@@ -5,6 +5,7 @@
 import { BoardState } from '../types';
 import { BOARD_SIZE, countTiles, emptyBoard } from './boardLayout';
 import { logError } from './sync/diagnostics';
+import { TOMBSTONE_MS } from './sync/constants';
 
 export interface Game {
     id: string;
@@ -265,14 +266,12 @@ export const deleteGame = (id: string): Promise<void> =>
         ? { ...stored, deletedAt: Date.now(), updatedAt: Date.now(), rev: (stored.rev ?? 1) + 1, editedBy: getDeviceId() }
         : undefined);
 
-const TOMBSTONE_DAYS = 30;
-
 /**
  * Elimina del todo las lápidas de más de 30 días (plazo provisional). Con `only`, elimina
  * exactamente esas lápidas, sea cual sea su edad (las que el servidor ya purgó).
  */
 export const purgeDeleted = (now = Date.now(), only?: string[]): Promise<void> => enqueueWrite(async () => {
-    const limit = now - TOMBSTONE_DAYS * 86_400_000;
+    const limit = now - TOMBSTONE_MS;
     const wanted = only ? new Set(only) : null;
     const expired = (await listAllGames()).filter(g => g.deletedAt !== undefined
         && (wanted ? wanted.has(g.id) : g.deletedAt < limit));

@@ -236,11 +236,12 @@ try {
 
     /** Servidor con ETag por versión; `hooks` permite provocar fallos en cada paso. */
     const fakeServer = () => {
-        const s = { doc: null, version: 0, hooks: {}, pushes: 0 };
+        const s = { doc: null, version: 0, hooks: {}, pushes: 0, notModified: 0, conditional: false };
         s.transport = (token) => ({
-            async pull() {
+            async pull(etag) {
                 if (s.hooks.pull) await s.hooks.pull();
                 if (token !== 'secreto') throw new SyncError('unauthorized');
+                if (s.conditional && s.doc && etag === `v${s.version}`) { s.notModified++; return { status: 'notModified' }; }
                 return s.doc ? { status: 'ok', doc: clone(s.doc), etag: `v${s.version}` } : { status: 'empty' };
             },
             async push(doc, etag) {
@@ -254,9 +255,9 @@ try {
         });
         return s;
     };
-    const fakeDevice = (name, srv, { backupFails = false } = {}) => {
+    const fakeDevice = (name, srv, { backupFails = false, extra = {} } = {}) => {
         const games = new Map();
-        let stored = { enabled: false, token: '', etag: null, lastSyncedAt: null, firstSyncDone: false };
+        let stored = { enabled: false, token: '', etag: null, lastSyncedAt: null, firstSyncPending: false, lastError: null };
         const store = {
             async listAll() { return [...games.values()].map(clone); },
             async purge(ids) { for (const id of ids) games.delete(id); },
@@ -269,8 +270,9 @@ try {
             meta: { load: () => ({ ...stored }), save: m => { stored = { ...m }; } },
             backupBeforeFirstSync: async () => { if (backupFails) throw new Error('cuota'); },
             now: () => 1234,
+            ...extra,
         });
-        return { name, games, store, engine };
+        return { name, games, store, engine, savedMeta: () => stored };
     };
     const addGame = (dev, id, rev = 1) => dev.games.set(id, clone(game(id, id, rev)));
     const docOf = dev => Object.fromEntries([...dev.games.values()].map(g => [g.id, stripLocal(g)]));
@@ -285,7 +287,7 @@ try {
         assert.equal(pc.engine.getState().lastSyncedAt, 1234);
         assert.ok(srv.doc.games.a, 'el servidor recibió la partida');
         assert.equal(pc.games.get('a').syncedRev, 1, 'la partida quedó confirmada');
-        assert.equal(pc.engine.getMeta().firstSyncDone, true);
+        assert.equal(pc.engine.getMeta().firstSyncPending, false);
     }
     {   // El servidor purgó una lápida que este aparato ya había subido: se elimina, sin resubirla.
         const srv = fakeServer(), pc = fakeDevice('pc', srv);
@@ -298,6 +300,61 @@ try {
         assert.equal(pc.games.has('old'), false, 'la lápida que el servidor ya no tiene se elimina en local');
         assert.equal(srv.doc.games.old, undefined, 'y no se vuelve a subir');
         assert.equal(srv.pushes, pushes, 'sin subidas nuevas');
+    }
+    {   // Con ETag conocido, un 304 evita volver a traer el documento; lo pendiente se sube igual.
+        const srv = fakeServer(), pc = fakeDevice('pc', srv);
+        srv.conditional = true;
+        addGame(pc, 'a');
+        await pc.engine.enable('secreto');
+        await pc.engine.sync();
+        assert.equal(srv.notModified, 1, 'sin cambios en el servidor, responde 304');
+        assert.equal(srv.pushes, 1, 'y no sube nada');
+        pc.games.set('a', { ...pc.games.get('a'), rack: 'nuevo', rev: 2 });
+        const before = srv.pushes;
+        await pc.engine.sync();
+        assert.equal(srv.pushes, before + 1, 'con una edición pendiente sube aunque el servidor no cambiara');
+        assert.equal(srv.doc.games.a.rack, 'nuevo');
+        assert.equal(pc.games.get('a').syncedRev, 2, 'y la confirma');
+    }
+    {   // Disparadores inyectables: pestaña visible, red recuperada y 2 s tras la última edición.
+        const srv = fakeServer();
+        let onVisible, onOnline, timer = null, offCalls = 0, cleared = 0;
+        const timers = { set: (fn, ms) => { timer = { fn, ms }; return timer; }, clear: () => { cleared++; timer = null; } };
+        const events = {
+            onVisible: cb => { onVisible = cb; return () => { offCalls++; }; },
+            onOnline: cb => { onOnline = cb; return () => { offCalls++; }; },
+        };
+        const pc = fakeDevice('pc', srv, { extra: { timers, events } });
+        addGame(pc, 'a');
+        await pc.engine.enable('secreto');
+        let runs = 0;
+        const stop = pc.engine.start(async () => { runs++; await pc.engine.sync(); });
+        assert.equal(runs, 1, 'arrancar sincroniza una vez');
+        onVisible(); onOnline();
+        assert.equal(runs, 3, 'visible y online disparan un ciclo cada uno');
+        pc.engine.notifyEdit(); pc.engine.notifyEdit();
+        assert.equal(cleared, 1, 'cada edición reinicia la espera');
+        assert.equal(timer.ms, 2000, 'la espera es de 2 s');
+        timer.fn();
+        assert.equal(runs, 4, 'al vencer la espera sincroniza');
+        stop();
+        assert.equal(offCalls, 2, 'la baja retira los dos disparadores');
+    }
+    {   // El último error se guarda y sobrevive a un reinicio; sincronizar bien lo borra.
+        const srv = fakeServer(), pc = fakeDevice('pc', srv);
+        addGame(pc, 'a');
+        srv.hooks.tooLarge = true;
+        await pc.engine.enable('secreto');
+        assert.equal(pc.engine.getState().status, 'error');
+        assert.match(pc.savedMeta().lastError ?? '', /1 MB/, 'el error queda persistido');
+        const reborn = createSyncEngine({
+            store: pc.store, transport: srv.transport, backupBeforeFirstSync: async () => {},
+            meta: { load: () => ({ ...pc.savedMeta() }), save: () => {} },
+        });
+        assert.equal(reborn.getState().status, 'error', 'tras reiniciar sigue mostrando el error');
+        srv.hooks.tooLarge = false;
+        await pc.engine.sync();
+        assert.equal(pc.savedMeta().lastError, null, 'sincronizar bien lo borra');
     }
     {   // Dos aparatos convergen, y desactivar no borra partidas.
         const srv = fakeServer(), pc = fakeDevice('pc', srv), phone = fakeDevice('phone', srv);

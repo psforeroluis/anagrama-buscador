@@ -3,7 +3,8 @@
 // cuenta: todo llega inyectado, así que se prueba en Node con un servidor simulado.
 
 import type { Game, SaveOrigin } from '../gamesStore';
-import { merge, revOf, type RemoteGames } from './syncMerge';
+import { hasPending, merge, revOf, stripLocal, type RemoteGames } from './syncMerge';
+import { logError } from './diagnostics';
 import { SyncError, type SyncTransport } from './syncTransport';
 
 export type SyncStatus = 'disabled' | 'syncing' | 'upToDate' | 'offline' | 'tokenRejected' | 'error';
@@ -30,7 +31,10 @@ export interface SyncMeta {
     token: string;
     etag: string | null;
     lastSyncedAt: number | null;
-    firstSyncDone: boolean;
+    /** Activada la sincronización pero aún sin completar el primer ciclo (copia previa pendiente). */
+    firstSyncPending: boolean;
+    /** Último error que se mostró; se conserva entre sesiones y se vacía al sincronizar bien. */
+    lastError: string | null;
 }
 
 export interface SyncMetaStorage {
@@ -46,7 +50,16 @@ export interface SyncEngineDeps {
     backupBeforeFirstSync: () => Promise<void>;
     now?: () => number;
     onChange?: (state: SyncState) => void;
+    /** Temporizador inyectable (para probar la espera de 2 s tras una edición). */
+    timers?: { set(fn: () => void, ms: number): unknown; clear(handle: unknown): void };
+    /** Fuente de eventos inyectable: pestaña visible y red recuperada. */
+    events?: {
+        onVisible(callback: () => void): () => void;
+        onOnline(callback: () => void): () => void;
+    };
 }
+
+export const EDIT_DELAY_MS = 2000;
 
 const MAX_CONFLICT_RETRIES = 3;
 
@@ -62,11 +75,14 @@ const messages: Record<string, string> = {
 export const createSyncEngine = (deps: SyncEngineDeps) => {
     const now = deps.now ?? Date.now;
     let meta = deps.meta.load();
+    const timers = deps.timers ?? { set: (fn: () => void, ms: number) => setTimeout(fn, ms), clear: (h: unknown) => clearTimeout(h as number) };
     let running = false;
     let again = false;
+    let editTimer: unknown;
+    let handler: () => Promise<void> = () => sync();
     let state: SyncState = {
-        status: meta.enabled && meta.token ? 'upToDate' : 'disabled',
-        pending: 0, lastSyncedAt: meta.lastSyncedAt, error: null, notices: [],
+        status: !meta.enabled || !meta.token ? 'disabled' : meta.lastError ? 'error' : 'upToDate',
+        pending: 0, lastSyncedAt: meta.lastSyncedAt, error: meta.enabled ? meta.lastError : null, notices: [],
     };
 
     const setState = (patch: Partial<SyncState>) => {
@@ -98,7 +114,22 @@ export const createSyncEngine = (deps: SyncEngineDeps) => {
         const transport = deps.transport(meta.token);
         const notices: string[] = [];
         for (let attempt = 0; attempt < MAX_CONFLICT_RETRIES; attempt++) {
-            const pulled = await transport.pull();
+            const pulled = await transport.pull(meta.etag ?? undefined);
+
+            if (pulled.status === 'notModified') {
+                // El servidor no cambió desde la última lectura: solo hay que subir lo pendiente.
+                const all = await deps.store.listAll();
+                if (!all.some(hasPending)) return notices;
+                const doc: RemoteGames = Object.fromEntries(all.map(g => [g.id, stripLocal(g)]));
+                const sent = await transport.push({ schemaVersion: 1, games: doc }, meta.etag ?? undefined);
+                if (sent.status === 'ok') {
+                    saveMeta({ etag: sent.etag });
+                    await acknowledge(doc);
+                    return notices;
+                }
+                continue;
+            }
+
             const remote = pulled.status === 'ok' ? pulled.doc.games : null;
             const etag = pulled.status === 'ok' ? pulled.etag : undefined;
 
@@ -132,25 +163,32 @@ export const createSyncEngine = (deps: SyncEngineDeps) => {
         throw new SyncError('conflicts');
     };
 
+    /** Pasa a `error`: lo guarda para la sesión siguiente y lo anota en Diagnóstico. */
+    const fail = (pending: number, message: string, cause: unknown) => {
+        logError('sync', cause instanceof SyncError ? `${cause.kind}: ${message}` : cause);
+        saveMeta({ lastError: message });
+        setState({ status: 'error', pending, error: message });
+    };
+
     const run = async (): Promise<void> => {
         if (!meta.enabled || !meta.token) { setState({ status: 'disabled' }); return; }
         setState({ status: 'syncing', error: null });
         try {
-            if (!meta.firstSyncDone) {
+            if (meta.firstSyncPending) {
                 try { await deps.backupBeforeFirstSync(); }
                 catch { throw new SyncError('backup'); }
             }
             const notices = await cycle();
-            saveMeta({ firstSyncDone: true, lastSyncedAt: now() });
+            saveMeta({ firstSyncPending: false, lastSyncedAt: now(), lastError: null });
             setState({ status: 'upToDate', lastSyncedAt: meta.lastSyncedAt, pending: await countPending(), notices });
         } catch (e) {
             const pending = await countPending().catch(() => state.pending);
             if (e instanceof SyncError) {
                 if (e.kind === 'unauthorized') setState({ status: 'tokenRejected', pending, error: null });
                 else if (e.kind === 'offline') setState({ status: 'offline', pending, error: null });
-                else setState({ status: 'error', pending, error: messages[e.kind] ?? e.message });
+                else fail(pending, messages[e.kind] ?? e.message, e);
             } else {
-                setState({ status: 'error', pending, error: 'Error inesperado al sincronizar.' });
+                fail(pending, 'Error inesperado al sincronizar.', e);
             }
         }
     };
@@ -169,12 +207,31 @@ export const createSyncEngine = (deps: SyncEngineDeps) => {
         getMeta: () => meta,
         sync,
         async enable(token: string) {
-            saveMeta({ enabled: true, token: token.trim(), etag: null });
+            saveMeta({ enabled: true, token: token.trim(), etag: null, firstSyncPending: true, lastError: null });
             await sync();
         },
         disable() {
-            saveMeta({ enabled: false, token: '', etag: null, firstSyncDone: false });
+            if (editTimer !== undefined) { timers.clear(editTimer); editTimer = undefined; }
+            saveMeta({ enabled: false, token: '', etag: null, firstSyncPending: false, lastError: null });
             setState({ status: 'disabled', error: null, notices: [] });
+        },
+        /**
+         * Sincroniza ahora y en cada disparador: pestaña visible y red recuperada.
+         * `run` permite que la interfaz envuelva el ciclo (volcar escrituras antes,
+         * refrescar la lista después); por defecto es `sync`. Devuelve la baja.
+         */
+        start(run?: () => Promise<void>): () => void {
+            handler = run ?? (() => sync());
+            const events = deps.events;
+            const off = [events?.onVisible(() => { void handler(); }), events?.onOnline(() => { void handler(); })];
+            void handler();
+            return () => off.forEach(fn => fn?.());
+        },
+        /** Una edición local: sincroniza 2 s después de la última (cada edición reinicia la espera). */
+        notifyEdit() {
+            if (!meta.enabled) return;
+            if (editTimer !== undefined) timers.clear(editTimer);
+            editTimer = timers.set(() => { editTimer = undefined; void handler(); }, EDIT_DELAY_MS);
         },
         async refreshPending() { setState({ pending: await countPending() }); },
         /** Para pruebas: ¿hay una sincronización en curso o encadenada? */

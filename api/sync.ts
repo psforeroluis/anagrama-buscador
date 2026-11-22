@@ -107,8 +107,11 @@ export default {
             // Precondiciones explícitas (el `ifMatch` del almacén las repite de forma atómica):
             // crear solo si no existe; sobrescribir solo con el ETag leído.
             const existing = await readBlobText(PATH);
-            if (!ifMatch && existing) return json(412, { error: 'conflict' });
-            if (ifMatch && (!existing || strongEtag(existing.etag) !== ifMatch)) return json(412, { error: 'conflict' });
+            if (!ifMatch && existing) { console.warn('sync: 412 crear con documento existente'); return json(412, { error: 'conflict' }); }
+            if (ifMatch && (!existing || strongEtag(existing.etag) !== ifMatch)) {
+                console.warn('sync: 412 precondición', JSON.stringify({ ifMatch, existing: existing?.etag ?? null }));
+                return json(412, { error: 'conflict' });
+            }
 
             // Versión previa como red de seguridad (mejor esfuerzo: si falla, no impide guardar).
             try {
@@ -128,7 +131,7 @@ export default {
             return json(200, { etag }, { ETag: etag });
         } catch (error) {
             // Otro aparato escribió antes, o la creación chocó con un documento ya existente.
-            if (error instanceof BlobPreconditionFailedError) return json(412, { error: 'conflict' });
+            if (error instanceof BlobPreconditionFailedError) { console.warn('sync: 412 del almacén', error.message); return json(412, { error: 'conflict' }); }
             const message = error instanceof Error ? error.message : '';
             // Dos escrituras condicionales simultáneas: el almacén rechaza a la perdedora con
             // "conflicting operation" (comprobado en la fase 2b), que es también un choque.

@@ -7,18 +7,19 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node tests/dictionary.mjs && node tests/regresion.mjs && node tests/persistence.mjs",
+    "test": "node tests/dictionary.mjs && node tests/regresion.mjs && node tests/persistence.mjs && node tests/sync.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@vercel/blob": "^2.9.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "esbuild": "^0.25.12",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0",
-    "esbuild": "^0.25.12"
+    "vite": "^6.2.0"
   }
 }

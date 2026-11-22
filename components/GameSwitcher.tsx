@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Game } from '../services/gamesStore';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Game, sortByUsage } from '../services/gamesStore';
 import { countTiles } from '../services/boardLayout';
 import Overlay from './Overlay';
 
@@ -7,11 +7,14 @@ interface GameSwitcherProps {
     games: Game[];
     activeId: string;
     onSelect: (id: string) => void;
-    onCreate: () => void;
+    /** Crea y abre una partida; devuelve la nueva para poder nombrarla. */
+    onCreate: () => Game;
     onRename: (id: string, name: string) => void;
     onDelete: (id: string) => void;
     onExport: () => void;
     onImport: (file: File) => void;
+    syncLabel: string;
+    onOpenSync: () => void;
 }
 
 const relativeTime = (ts: number): string => {
@@ -34,7 +37,7 @@ const foldText = (text: string): string =>
 const SEARCH_FROM = 3;
 
 const GameSwitcher: React.FC<GameSwitcherProps> = ({
-    games, activeId, onSelect, onCreate, onRename, onDelete, onExport, onImport,
+    games, activeId, onSelect, onCreate, onRename, onDelete, onExport, onImport, syncLabel, onOpenSync,
 }) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [draft, setDraft] = useState('');
@@ -43,13 +46,31 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({
     const editRef = useRef<HTMLInputElement | null>(null);
     const fileRef = useRef<HTMLInputElement | null>(null);
 
+    const [naming, setNaming] = useState<Game | null>(null);
+    const [newName, setNewName] = useState('');
+
+    // Las más usadas arriba; las de poco movimiento se hunden hacia el final.
+    const ordered = useMemo(() => sortByUsage(games), [games]);
     const showSearch = games.length >= SEARCH_FROM;
     const needle = foldText(query.trim());
     const visible = needle
-        ? games.filter(g => foldText(g.name).includes(needle))
-        : games;
+        ? ordered.filter(g => foldText(g.name).includes(needle))
+        : ordered;
 
     useEffect(() => { if (editingId) editRef.current?.select(); }, [editingId]);
+
+    const startCreate = () => {
+        const game = onCreate();
+        setNewName(game.name);
+        setNaming(game);
+    };
+
+    const finishNaming = (keepDefault: boolean) => {
+        if (!naming) return;
+        const name = newName.trim().slice(0, 40);
+        if (!keepDefault && name && name !== naming.name) onRename(naming.id, name);
+        setNaming(null);
+    };
 
     const startRename = (game: Game) => {
         setDraft(game.name);
@@ -71,6 +92,14 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({
                     Partidas · {games.length}
                 </span>
                 <div className="flex items-center gap-3 text-xs">
+                    <button
+                        type="button"
+                        onClick={onOpenSync}
+                        className="focus-ring text-brand-subtle/80 hover:text-accent-soft transition-colors"
+                        title="Sincronizar las partidas entre aparatos"
+                    >
+                        <i className="fa-solid fa-arrows-rotate mr-1.5" />{syncLabel}
+                    </button>
                     <button
                         type="button"
                         onClick={onExport}
@@ -209,15 +238,64 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({
 
             <button
                 type="button"
-                onClick={onCreate}
+                onClick={startCreate}
                 className="focus-ring w-full mt-1.5 rounded-xl px-3.5 py-2.5 border border-dashed border-white/15 text-brand-subtle/70 hover:border-accent/60 hover:text-accent-soft transition-all text-sm font-semibold text-left"
             >
                 <i className="fa-solid fa-plus mr-2.5" />Nueva partida
             </button>
 
             <p className="text-[11px] text-brand-subtle/50 mt-2 ml-1">
-                Cada partida guarda su tablero y su atril. Doble clic en el nombre para renombrarla.
+                Cada partida guarda su tablero y su atril. Las más usadas suben; las de poco movimiento pasan al final. Doble clic en el nombre para renombrarla.
             </p>
+
+            {/* Nombre de la partida recién creada: ya existe con un nombre por
+                defecto, así que cerrar el diálogo nunca la pierde. */}
+            {naming && (
+                <Overlay onClose={() => finishNaming(true)}>
+                    <form
+                        className="bg-ink-700 border border-white/10 rounded-3xl w-full max-w-sm p-6 my-auto shadow-[0_30px_80px_-20px_rgba(0,0,0,.95)]"
+                        onClick={e => e.stopPropagation()}
+                        onSubmit={e => { e.preventDefault(); finishNaming(false); }}
+                    >
+                        <div className="flex items-start gap-3.5">
+                            <div className="w-10 h-10 rounded-2xl bg-accent/15 flex items-center justify-center shrink-0">
+                                <i className="fa-solid fa-pen text-accent-soft" />
+                            </div>
+                            <div className="min-w-0">
+                                <h3 className="font-bold tracking-tight">Nueva partida</h3>
+                                <p className="text-sm text-brand-subtle mt-1">Ponle un nombre para reconocerla.</p>
+                            </div>
+                        </div>
+
+                        <input
+                            value={newName}
+                            autoFocus
+                            maxLength={40}
+                            onFocus={e => e.currentTarget.select()}
+                            onChange={e => setNewName(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); finishNaming(true); } }}
+                            className="w-full mt-5 px-4 py-3 surface-inset rounded-xl text-sm text-white focus:outline-none focus:border-accent/60 focus:ring-2 focus:ring-accent/15 transition-all"
+                            aria-label="Nombre de la nueva partida"
+                        />
+
+                        <div className="flex flex-col-reverse sm:flex-row gap-2.5 mt-6">
+                            <button
+                                type="button"
+                                onClick={() => finishNaming(true)}
+                                className="focus-ring flex-1 px-5 py-3 rounded-2xl tile text-brand-subtle font-semibold hover:text-white transition-colors"
+                            >
+                                Dejar «{naming.name}»
+                            </button>
+                            <button
+                                type="submit"
+                                className="focus-ring flex-1 px-5 py-3 rounded-2xl bg-accent/15 text-accent-soft font-bold hover:bg-accent/25 transition-colors"
+                            >
+                                Guardar nombre
+                            </button>
+                        </div>
+                    </form>
+                </Overlay>
+            )}
 
             {/* Confirmación de borrado: en su propio diálogo y no donde acabas
                 de tocar la papelera, para que un toque de más no borre nada. */}

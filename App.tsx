@@ -8,9 +8,12 @@ import GameSwitcher from './components/GameSwitcher';
 import { FoundWord, SearchMode, BoardSlot, BoardMove, BoardState, MoveRanking } from './types';
 import { censusTiles, emptyBoard } from './services/boardLayout';
 import {
-    Game, createGame, deleteGame, initGames, listGames, nextGameName, saveGame,
+    Game, SaveOrigin, createGame, deleteGame, initGames, listGames, nextGameName, purgeDeleted, saveGame,
     getActiveId, setActiveId as persistActiveId,
 } from './services/gamesStore';
+import { syncEngine, subscribeSync, syncChipText } from './services/sync/syncRuntime';
+import type { SyncState } from './services/sync/syncEngine';
+import SyncPanel from './components/SyncPanel';
 import { blockWord, loadBlocked, saveBlocked, unblockWord } from './services/wordBlocklist';
 import { addCandidates, loadCandidates, removeCandidate, saveCandidates } from './services/wordCandidates';
 import { downloadBackup, restoreBackup } from './services/backup';
@@ -100,9 +103,9 @@ const App: React.FC = () => {
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
     const pendingWrites = useRef(new Set<Promise<void>>());
     const failedGames = useRef(new Map<string, Game>());
-    const persistGame = useCallback((game: Game) => {
+    const persistGame = useCallback((game: Game, origin: SaveOrigin = 'edit') => {
         setSaveStatus('saving');
-        const operation = saveGame(game);
+        const operation = saveGame(game, origin);
         pendingWrites.current.add(operation);
         operation.then(() => {
             pendingWrites.current.delete(operation);
@@ -344,6 +347,7 @@ const App: React.FC = () => {
         if (!current) return;
         const updated: Game = {
             ...current, board, rack: boardRack, blanks: boardBlanks, updatedAt: Date.now(),
+            uses: (current.uses ?? 0) + 1,
         };
         setGames(prev => prev.map(g => g.id === activeGameId ? updated : g));
         void persistGame(updated);
@@ -358,9 +362,13 @@ const App: React.FC = () => {
         setBoard(game.board);
         setBoardRack(game.rack);
         setBoardBlanks(game.blanks);
-    }, [games, activeGameId]);
+        // Abrir una partida también cuenta como usarla.
+        const opened = { ...game, uses: (game.uses ?? 0) + 1, updatedAt: Date.now() };
+        setGames(prev => prev.map(g => g.id === id ? opened : g));
+        void persistGame(opened, 'usage');
+    }, [games, activeGameId, persistGame]);
 
-    const handleCreateGame = useCallback(() => {
+    const handleCreateGame = useCallback((): Game => {
         const game = createGame(nextGameName(games));
         void persistGame(game);
         skipSaveRef.current = true;
@@ -370,8 +378,8 @@ const App: React.FC = () => {
         setBoard(game.board);
         setBoardRack(game.rack);
         setBoardBlanks(game.blanks);
-        showToast(`${game.name} creada`);
-    }, [games, persistGame, showToast]);
+        return game;
+    }, [games, persistGame]);
 
     const handleExportGames = useCallback(async () => {
         try {
@@ -466,6 +474,71 @@ const App: React.FC = () => {
         });
     }, [games, activeGameId, showToast, closeToast, persistGame]);
 
+    // --- Sincronización entre aparatos ---
+    const [syncState, setSyncState] = useState<SyncState>(syncEngine.getState());
+    const [syncEnabled, setSyncEnabled] = useState(syncEngine.getMeta().enabled);
+    const [syncOpen, setSyncOpen] = useState(false);
+    const gamesRef = useRef<Game[]>([]);
+    gamesRef.current = games;
+    const activeIdRef = useRef('');
+    activeIdRef.current = activeGameId;
+    useEffect(() => subscribeSync(state => { setSyncState(state); setSyncEnabled(syncEngine.getMeta().enabled); }), []);
+
+    /** Sincroniza y vuelve a leer las partidas por si el servidor trajo cambios. */
+    const runSync = useCallback(async () => {
+        if (!syncEngine.getMeta().enabled) return;
+        await Promise.all([...pendingWrites.current]);
+        await syncEngine.sync();
+        await Promise.all([...pendingWrites.current]);
+        const stored = await listGames();
+        if (stored.length === 0) return;
+        setGames(stored);
+        const current = stored.find(g => g.id === activeIdRef.current) ?? stored[0];
+        const shown = gamesRef.current.find(g => g.id === current.id);
+        const changed = !shown || shown.rack !== current.rack || shown.blanks !== current.blanks
+            || shown.board.letters.join() !== current.board.letters.join()
+            || shown.board.blanks.join() !== current.board.blanks.join();
+        if (current.id !== activeIdRef.current || changed) {
+            // Solo se marca como "ya guardado" cuando el estado realmente cambia: si no, el
+            // efecto de guardado no se ejecuta y se tragaría la siguiente edición.
+            skipSaveRef.current = true;
+            setActiveGameId(current.id);
+            persistActiveId(current.id);
+            setBoard(current.board);
+            setBoardRack(current.rack);
+            setBoardBlanks(current.blanks);
+        }
+        const notice = syncEngine.getState().notices[0];
+        if (notice) showToast(notice);
+    }, [showToast]);
+
+    const gamesLoaded = games.length > 0;
+    useEffect(() => {
+        if (!gamesLoaded) return;
+        if (!syncEngine.getMeta().enabled) void purgeDeleted();
+        void runSync();
+        const onVisible = () => { if (document.visibilityState === 'visible') void runSync(); };
+        const onOnline = () => { void runSync(); };
+        document.addEventListener('visibilitychange', onVisible);
+        window.addEventListener('online', onOnline);
+        return () => {
+            document.removeEventListener('visibilitychange', onVisible);
+            window.removeEventListener('online', onOnline);
+        };
+    }, [gamesLoaded, runSync]);
+
+    // 2 s después de una edición se envía a segundo plano.
+    useEffect(() => {
+        if (!syncEnabled || !activeGameId) return;
+        const timer = setTimeout(() => { void runSync(); }, 2000);
+        return () => clearTimeout(timer);
+    }, [board, boardRack, boardBlanks, activeGameId, syncEnabled, runSync]);
+
+    const syncLabel = syncEnabled ? syncChipText(syncState, ts => {
+        const mins = Math.round((Date.now() - ts) / 60000);
+        return mins < 1 ? 'ahora' : mins < 60 ? `hace ${mins} min` : `hace ${Math.round(mins / 60)} h`;
+    }) : 'Sincronizar';
+
     // Al abrir la pestaña de tablero preparamos el DAWG en segundo plano,
     // así el primer "Mejor jugada" ya lo encuentra listo.
     const warmedRef = useRef(false);
@@ -535,6 +608,8 @@ const App: React.FC = () => {
                                     onDelete={handleDeleteGame}
                                     onExport={handleExportGames}
                                     onImport={handleImportGames}
+                                    syncLabel={syncLabel}
+                                    onOpenSync={() => setSyncOpen(true)}
                                 />
                             )}
                             <BoardPanel
@@ -613,6 +688,17 @@ const App: React.FC = () => {
                 </footer>
             </div>
 
+            {syncOpen && (
+                <SyncPanel
+                    state={syncState}
+                    enabled={syncEnabled}
+                    chipText={syncLabel}
+                    onEnable={token => { void syncEngine.enable(token).then(runSync); }}
+                    onDisable={() => { syncEngine.disable(); setSyncEnabled(false); }}
+                    onSyncNow={() => { void runSync(); }}
+                    onClose={() => setSyncOpen(false)}
+                />
+            )}
             <Toast message={toastMessage} action={toastAction} onClose={closeToast} />
         </div>
     );

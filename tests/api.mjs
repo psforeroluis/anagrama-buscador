@@ -21,7 +21,7 @@ try {
         export const put = async (path, text, opts) => {
             const f = files.get(path);
             if (f && !opts.allowOverwrite) throw new Error('This blob already exists');
-            if (f && opts.ifMatch && opts.ifMatch !== f.etag) throw new BlobPreconditionFailedError('stale');
+            if (f && opts.ifMatch && opts.ifMatch !== f.etag.replace('W/', '')) throw new BlobPreconditionFailedError('stale');
             if (globalThis.__blobRace && path === 'anagrama-sync.json') { globalThis.__blobRace = false; throw new Error('Vercel Blob: The conditional request cannot succeed due to a conflicting operation against this resource.'); }
             const etag = (globalThis.__weakEtags ? 'W/' : '') + '"v' + (++version) + '"';
             files.set(path, { text, etag });

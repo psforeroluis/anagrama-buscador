@@ -124,8 +124,9 @@ export default {
 
             const written = await put(PATH, body, {
                 access: 'private', addRandomSuffix: false, contentType: 'application/json', ...STORE,
-                // Al almacén se le pasa su propio ETag (con el formato que él usa), no el que llegó del cliente.
-                ...(existing && ifMatch ? { allowOverwrite: true, ifMatch: existing.etag } : { allowOverwrite: false }),
+                // Al almacén se le pasa el ETag en su forma fuerte: `get` puede devolverlo débil
+                // (`W/"..."`), pero la precondición de `put` se compara con la forma fuerte.
+                ...(existing && ifMatch ? { allowOverwrite: true, ifMatch: strongEtag(existing.etag) ?? ifMatch } : { allowOverwrite: false }),
             });
             const etag = (written as { etag?: string }).etag ?? (await head(PATH, STORE)).etag;
             return json(200, { etag }, { ETag: etag });

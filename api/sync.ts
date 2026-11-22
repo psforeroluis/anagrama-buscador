@@ -124,6 +124,8 @@ export default {
             if (error instanceof BlobPreconditionFailedError) return json(412, { error: 'conflict' });
             const message = error instanceof Error ? error.message : '';
             if (/already exists/i.test(message)) return json(412, { error: 'conflict' });
+            // Solo nombre y mensaje del error: nunca el contenido de las partidas.
+            console.error('sync: error del servidor', error instanceof Error ? `${error.name}: ${message}` : String(error));
             return json(500, { error: 'server' });
         }
     },

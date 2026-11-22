@@ -595,7 +595,7 @@
 
 # Etapa 9: hallazgos de preparación para implementar (ronda 1)
 
-**Status (etapa 9):** pending (a la espera de tu decisión).
+**Status (etapa 9):** resolved ("auto accept" el 2026-11-22: aplicados los 52 arreglos PROPOSE FIX; N19 descartado). Notas: la especificación cambió en B2 (sin `deletedBaseRev`), M15/B5 (sin `pushOnly`/`full`) y B1/M17 (fase 7 diferida y posterior a la 4); el plan se reescribió de la fase 0 a la 7 y su estado del código se reconcilió con `bef3b54`, que ya contiene una implementación previa (por ejemplo, el id de la copia usa hash). Sin re-auditar todavía.
 **Target:** `docs/designs/anagrama-sync-y-uso-movil.md` (líneas 376-630, Detailed Implementation Plan). Los identificadores B1…, M1…, N1… son los de `implementation_readiness_report.md`.
 **Resumen de categorías:** 52 PROPOSE FIX (5 Blocker, 25 Major y 22 Nit), 1 DECLINE (N19) y ningún ESCALATE ni CONTEST. Comprobé contra el código lo que podía: B5 es cierto (`Importar` está en `components/GameSwitcher.tsx`, no en `ScreenshotImport.tsx`), `max-w-6xl` está en `App.tsx:512`, la interfaz de Mantenimiento está en `components/BoardPanel.tsx` y `tsconfig.json` tiene `types: ["node"]` y no incluye `api/`.
 

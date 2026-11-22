@@ -9,8 +9,9 @@
 //                      llega If-Match y no existe | 413 si pesa más de 1 MB |
 //                      400 con { error: 'schema' | 'body' } | 405 otros métodos
 //
-// Variables de entorno: SYNC_TOKEN (token personal) y las del almacén Blob
-// (BLOB_READ_WRITE_TOKEN, que Vercel define al conectar el almacén al proyecto).
+// Variables de entorno: SYNC_TOKEN (token personal) y las del almacén Blob. Un almacén
+// conectado con el modelo nuevo de Vercel define BLOB_READ_WRITE_TOKEN_STORE_ID y autentica
+// con OIDC; con el modelo antiguo, BLOB_READ_WRITE_TOKEN (el SDK lo lee solo).
 
 import { timingSafeEqual } from 'node:crypto';
 import { BlobPreconditionFailedError, get, head, put } from '@vercel/blob';
@@ -19,6 +20,8 @@ import { TOMBSTONE_MS } from '../services/sync/constants.js';
 const PATH = 'anagrama-sync.json';
 const PREV_PATH = 'anagrama-sync.prev.json';
 const MAX_BYTES = 1_048_576;
+/** Con el modelo nuevo de Vercel Blob hay que indicar el almacén; sin él, el SDK usa el token. */
+const STORE = process.env.BLOB_READ_WRITE_TOKEN_STORE_ID ? { storeId: process.env.BLOB_READ_WRITE_TOKEN_STORE_ID } : {};
 const SCHEMA_VERSION = 1;
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
@@ -54,7 +57,7 @@ const parseDoc = (text: string): { schemaVersion: number; games: Record<string, 
 };
 
 const readBlobText = async (path: string): Promise<{ text: string; etag: string } | null> => {
-    const result = await get(path, { access: 'private', useCache: false });
+    const result = await get(path, { access: 'private', useCache: false, ...STORE });
     if (!result || result.statusCode !== 200 || !result.stream) return null;
     return { text: await new Response(result.stream).text(), etag: result.blob.etag };
 };
@@ -104,16 +107,16 @@ export default {
             try {
                 if (existing) {
                     await put(PREV_PATH, existing.text, {
-                        access: 'private', allowOverwrite: true, addRandomSuffix: false, contentType: 'application/json',
+                        access: 'private', allowOverwrite: true, addRandomSuffix: false, contentType: 'application/json', ...STORE,
                     });
                 }
             } catch (e) { console.warn('sync: no se pudo guardar la versión previa', e instanceof Error ? e.message : e); }
 
             const written = await put(PATH, body, {
-                access: 'private', addRandomSuffix: false, contentType: 'application/json',
+                access: 'private', addRandomSuffix: false, contentType: 'application/json', ...STORE,
                 ...(ifMatch ? { allowOverwrite: true, ifMatch } : { allowOverwrite: false }),
             });
-            const etag = (written as { etag?: string }).etag ?? (await head(PATH)).etag;
+            const etag = (written as { etag?: string }).etag ?? (await head(PATH, STORE)).etag;
             return json(200, { etag }, { ETag: etag });
         } catch (error) {
             // Otro aparato escribió antes, o la creación chocó con un documento ya existente.

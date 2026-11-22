@@ -8,12 +8,13 @@ import GameSwitcher from './components/GameSwitcher';
 import { FoundWord, SearchMode, BoardSlot, BoardMove, BoardState, MoveRanking } from './types';
 import { censusTiles, emptyBoard } from './services/boardLayout';
 import {
-    Game, SaveOrigin, createGame, deleteGame, initGames, listGames, nextGameName, purgeDeleted, saveGame,
+    Game, SaveOrigin, createGame, deleteGame, initGames, listDeletedGames, listGames, nextGameName, purgeDeleted, saveGame,
     getActiveId, setActiveId as persistActiveId,
 } from './services/gamesStore';
 import { syncEngine, subscribeSync, syncChipText } from './services/sync/syncRuntime';
 import type { SyncState } from './services/sync/syncEngine';
 import SyncPanel from './components/SyncPanel';
+import SyncErrorBanner from './components/SyncErrorBanner';
 import { blockWord, loadBlocked, saveBlocked, unblockWord } from './services/wordBlocklist';
 import { addCandidates, loadCandidates, removeCandidate, saveCandidates } from './services/wordCandidates';
 import { downloadBackup, restoreBackup } from './services/backup';
@@ -49,6 +50,7 @@ const App: React.FC = () => {
     const [activePatternQuery, setActivePatternQuery] = useState('');
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [toastAction, setToastAction] = useState<ToastAction | null>(null);
+    const [toastTone, setToastTone] = useState<'info' | 'error'>('info');
 
     // --- Modo tablero (una partida activa entre varias) ---
     const [tab, setTab] = useState<Tab>('buscador');
@@ -73,10 +75,13 @@ const App: React.FC = () => {
     }, []);
 
     // Los avisos con acción (deshacer) duran más: hay que darte tiempo a leerlos.
-    const showToast = useCallback((msg: string, action?: ToastAction) => {
+    // Con `persistent` no desaparece solo (hasta que se cierre); con `error` se anuncia como alerta.
+    const showToast = useCallback((msg: string, action?: ToastAction, options?: { error?: boolean; persistent?: boolean }) => {
         setToastMessage(msg);
         setToastAction(action ?? null);
+        setToastTone(options?.error ? 'error' : 'info');
         if (toastTimerRef.current !== null) clearTimeout(toastTimerRef.current);
+        if (options?.persistent) return;
         toastTimerRef.current = window.setTimeout(() => {
             setToastMessage(null);
             setToastAction(null);
@@ -115,7 +120,7 @@ const App: React.FC = () => {
             pendingWrites.current.delete(operation);
             failedGames.current.set(game.id, game);
             setSaveStatus('error');
-            showToast('No se pudo guardar la partida. Conserva esta pestaña abierta e inténtalo de nuevo.');
+            showToast('No se pudo guardar la partida. Conserva esta pestaña abierta e inténtalo de nuevo.', undefined, { error: true });
         });
         return operation;
     }, [showToast]);
@@ -172,7 +177,7 @@ const App: React.FC = () => {
                         } else {
                             setIsLoading(false);
                             setBoardLoading(false);
-                            showToast('No se pudo completar la búsqueda. Inténtalo de nuevo.');
+                            showToast('No se pudo completar la búsqueda. Inténtalo de nuevo.', undefined, { error: true });
                         }
                     }
                     else if (e.data.type === 'boardResult') {
@@ -393,7 +398,7 @@ const App: React.FC = () => {
             const filename = await downloadBackup();
             showToast(`Copia descargada: ${filename}`);
         } catch {
-            showToast('No se pudo generar la copia');
+            showToast('No se pudo generar la copia', undefined, { error: true });
         }
     }, [games, activeGameId, board, boardRack, boardBlanks, persistGame]);
 
@@ -419,7 +424,7 @@ const App: React.FC = () => {
                     : `Restaurado: ${partes.join(' · ')}`,
             );
         } catch (e) {
-            showToast(e instanceof Error ? e.message : 'No se pudo leer la copia');
+            showToast(e instanceof Error ? e.message : 'No se pudo leer la copia', undefined, { error: true });
         }
     }, []);
 
@@ -438,7 +443,7 @@ const App: React.FC = () => {
         if (!deleted || remaining.length === 0) return;
 
         const wasActive = id === activeGameId;
-        void deleteGame(id).catch(() => { setSaveStatus('error'); showToast('No se pudo eliminar la partida del almacenamiento.'); });
+        void deleteGame(id).catch(() => { setSaveStatus('error'); showToast('No se pudo eliminar la partida del almacenamiento.', undefined, { error: true }); });
         setGames(remaining);
         if (wasActive) {
             const next = remaining[0];
@@ -512,6 +517,29 @@ const App: React.FC = () => {
         if (notice) showToast(notice);
     }, [showToast]);
 
+    // Papelera: partidas borradas que aún se pueden restaurar.
+    const [deletedGames, setDeletedGames] = useState<Game[]>([]);
+    useEffect(() => {
+        let cancelled = false;
+        void listDeletedGames().then(list => { if (!cancelled) setDeletedGames(list); }).catch(() => {});
+        return () => { cancelled = true; };
+    }, [games]);
+
+    const handleRestoreGame = useCallback(async (id: string) => {
+        const deleted = deletedGames.find(g => g.id === id);
+        if (!deleted) return;
+        try {
+            // Restaurar es una edición: quita la lápida y sube `rev`.
+            const { deletedAt, ...restored } = deleted;
+            void deletedAt;
+            await saveGame(restored as Game, 'edit');
+            setGames(await listGames());
+            showToast(`«${deleted.name}» restaurada`);
+        } catch {
+            showToast('No se pudo restaurar la partida.', undefined, { error: true });
+        }
+    }, [deletedGames, showToast]);
+
     const gamesLoaded = games.length > 0;
     useEffect(() => {
         if (!gamesLoaded) return;
@@ -559,9 +587,6 @@ const App: React.FC = () => {
 
     return (
         <div className="min-h-screen font-sans flex flex-col items-center px-4 sm:px-6 lg:px-8 relative">
-            <p role="status" className="relative z-10 text-xs text-brand-subtle mt-3">
-                {saveStatus === 'saving' ? 'Guardando…' : saveStatus === 'error' ? 'Error al guardar: descarga una copia para reintentar' : 'Guardado'}
-            </p>
             {/* Ambient light */}
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
                 <div className="absolute -top-[15%] -left-[5%] w-[45vw] h-[45vw] rounded-full bg-accent-deep/20 blur-[130px] animate-float"></div>
@@ -572,6 +597,16 @@ const App: React.FC = () => {
                 <Header />
 
                 <main className="flex-grow">
+                    {syncEnabled && (syncState.status === 'error' || syncState.status === 'tokenRejected') && (
+                        <SyncErrorBanner
+                            message={syncState.status === 'tokenRejected'
+                                ? 'El servidor no aceptó el token. Vuelve a pegarlo.'
+                                : syncState.error ?? 'No se pudo sincronizar.'}
+                            actionLabel={syncState.status === 'tokenRejected' ? 'Abrir sincronización' : 'Reintentar'}
+                            busy={syncState.status === 'syncing'}
+                            onAction={() => { if (syncState.status === 'tokenRejected') setSyncOpen(true); else void runSync(); }}
+                        />
+                    )}
                     <div className="workspace-nav flex gap-1.5 mb-5 surface-inset rounded-2xl p-1.5 w-full sm:w-auto sm:inline-flex">
                         {([['buscador', 'fa-magnifying-glass', 'Buscador'], ['tablero', 'fa-table-cells-large', 'Tablero']] as const).map(([id, icon, label]) => (
                             <button
@@ -600,7 +635,12 @@ const App: React.FC = () => {
                                     onExport={handleExportGames}
                                     onImport={handleImportGames}
                                     syncLabel={syncLabel}
+                                    syncEnabled={syncEnabled}
+                                    syncStatus={syncState.status}
+                                    saveStatus={saveStatus}
                                     onOpenSync={() => setSyncOpen(true)}
+                                    deletedGames={deletedGames}
+                                    onRestore={handleRestoreGame}
                                 />
                             )}
                             <BoardPanel
@@ -675,7 +715,9 @@ const App: React.FC = () => {
                 </main>
 
                 <footer className="w-full text-center py-8 mt-8 text-xs text-brand-subtle/55">
-                    <p>Tu tablero y tus partidas se guardan en este dispositivo.</p>
+                    <p>{syncEnabled
+                        ? 'Tus partidas están sincronizadas entre tus aparatos con tu propio token.'
+                        : 'Tu tablero y tus partidas se guardan solo en este aparato.'}</p>
                 </footer>
             </div>
 
@@ -690,7 +732,7 @@ const App: React.FC = () => {
                     onClose={() => setSyncOpen(false)}
                 />
             )}
-            <Toast message={toastMessage} action={toastAction} onClose={closeToast} />
+            <Toast message={toastMessage} action={toastAction} tone={toastTone} onClose={closeToast} />
         </div>
     );
 };

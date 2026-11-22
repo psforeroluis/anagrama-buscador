@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { dumpDiagnostics, readDiagnostics, clearDiagnostics, type DiagnosticEntry } from '../services/sync/diagnostics';
 import Overlay from './Overlay';
 import type { SyncState } from '../services/sync/syncEngine';
 
@@ -15,6 +16,29 @@ interface SyncPanelProps {
 const SyncPanel: React.FC<SyncPanelProps> = ({ state, enabled, chipText, onEnable, onDisable, onSyncNow, onClose }) => {
     const [token, setToken] = useState('');
     const busy = state.status === 'syncing';
+    const [persisted, setPersisted] = useState<boolean | null>(null);
+    const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>(() => readDiagnostics());
+    const [copied, setCopied] = useState(false);
+
+    // Con la sincronización activa se pide almacenamiento persistente, para que el navegador
+    // no borre las partidas de este aparato si falta espacio (iOS lo hace tras semanas sin uso).
+    useEffect(() => {
+        if (!enabled) return;
+        const storage = typeof navigator !== 'undefined' ? navigator.storage : undefined;
+        if (!storage?.persist) return;
+        storage.persist().then(setPersisted, () => setPersisted(false));
+    }, [enabled]);
+
+    const copyDiagnostics = async () => {
+        const text = [
+            `Última sincronización: ${state.lastSyncedAt ? new Date(state.lastSyncedAt).toISOString() : 'nunca'}`,
+            `Pendientes: ${state.pending}`,
+            `Estado: ${state.status}`,
+            dumpDiagnostics(),
+        ].join('\n');
+        try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+        catch { setCopied(false); }
+    };
 
     return (
         <Overlay onClose={onClose}>
@@ -46,6 +70,41 @@ const SyncPanel: React.FC<SyncPanelProps> = ({ state, enabled, chipText, onEnabl
                     )}
                     {state.error && <div className="text-red-300 mt-1">{state.error}</div>}
                 </div>
+
+                {enabled && persisted === false && (
+                    <p className="mt-3 text-xs text-amber-200/90">
+                        El navegador puede borrar los datos de este aparato si necesita espacio. La copia del servidor los repone al volver a pegar el token.
+                    </p>
+                )}
+
+                <details className="mt-4 text-sm" onToggle={e => { if ((e.currentTarget as HTMLDetailsElement).open) setDiagnostics(readDiagnostics()); }}>
+                    <summary className="cursor-pointer text-brand-subtle hover:text-white focus-ring rounded">Diagnóstico</summary>
+                    <div className="mt-2 rounded-2xl surface-inset p-3 text-xs text-brand-subtle space-y-1">
+                        <div>Última sincronización: {state.lastSyncedAt ? new Date(state.lastSyncedAt).toLocaleString() : 'nunca'}</div>
+                        <div>Pendientes: {state.pending}</div>
+                        {diagnostics.length === 0
+                            ? <div>Sin errores registrados.</div>
+                            : (
+                                <ul className="max-h-40 overflow-auto space-y-0.5 font-mono text-[11px]">
+                                    {[...diagnostics].reverse().map(d => (
+                                        <li key={`${d.at}-${d.source}-${d.message}`} className="break-words">
+                                            {new Date(d.at).toLocaleTimeString()} [{d.source}] {d.message}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        <div className="flex gap-3 pt-1">
+                            <button type="button" onClick={copyDiagnostics} className="focus-ring text-accent-soft hover:text-white">
+                                {copied ? 'Copiado' : 'Copiar diagnóstico'}
+                            </button>
+                            {diagnostics.length > 0 && (
+                                <button type="button" onClick={() => { clearDiagnostics(); setDiagnostics([]); }} className="focus-ring hover:text-white">
+                                    Vaciar
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </details>
 
                 {!enabled ? (
                     <>

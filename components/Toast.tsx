@@ -9,16 +9,18 @@ export interface ToastAction {
 interface ToastProps {
     message: string | null;
     action?: ToastAction | null;
+    /** `error` usa `role="alert"` (se anuncia al momento); el resto, `role="status"`. */
+    tone?: 'info' | 'error';
     onClose: () => void;
 }
 
-const Toast: React.FC<ToastProps> = ({ message, action, onClose }) => {
+const Toast: React.FC<ToastProps> = ({ message, action, tone = 'info', onClose }) => {
     if (!message) return null;
 
     return (
-        <div className="fixed bottom-7 left-1/2 -translate-x-1/2 z-50 animate-rise max-w-[calc(100vw-2rem)]" role="status">
+        <div className="fixed bottom-7 left-1/2 -translate-x-1/2 z-50 animate-rise max-w-[calc(100vw-2rem)]" role={tone === 'error' ? 'alert' : 'status'} aria-live={tone === 'error' ? 'assertive' : 'polite'}>
             <div className="surface rounded-2xl px-5 py-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,.95)] flex items-center gap-3 text-sm">
-                <i className="fa-solid fa-circle-check text-aqua"></i>
+                <i className={tone === 'error' ? 'fa-solid fa-triangle-exclamation text-red-300' : 'fa-solid fa-circle-check text-aqua'}></i>
                 <span className="font-medium text-brand-text">{message}</span>
                 {action && (
                     <button

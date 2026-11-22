@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Game, sortByUsage } from '../services/gamesStore';
 import { countTiles } from '../services/boardLayout';
 import Overlay from './Overlay';
+import SyncStatusChip from './SyncStatusChip';
+import type { SyncStatus } from '../services/sync/syncEngine';
+import { TOMBSTONE_DAYS } from '../services/sync/constants';
 
 interface GameSwitcherProps {
     games: Game[];
@@ -14,7 +17,13 @@ interface GameSwitcherProps {
     onExport: () => void;
     onImport: (file: File) => void;
     syncLabel: string;
+    syncEnabled: boolean;
+    syncStatus: SyncStatus;
+    saveStatus: 'saved' | 'saving' | 'error';
     onOpenSync: () => void;
+    /** Partidas borradas que aún se pueden restaurar (la papelera). */
+    deletedGames: Game[];
+    onRestore: (id: string) => void;
 }
 
 const relativeTime = (ts: number): string => {
@@ -37,7 +46,8 @@ const foldText = (text: string): string =>
 const SEARCH_FROM = 3;
 
 const GameSwitcher: React.FC<GameSwitcherProps> = ({
-    games, activeId, onSelect, onCreate, onRename, onDelete, onExport, onImport, syncLabel, onOpenSync,
+    games, activeId, onSelect, onCreate, onRename, onDelete, onExport, onImport, syncLabel, syncEnabled, syncStatus, saveStatus,
+    onOpenSync, deletedGames, onRestore,
 }) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [draft, setDraft] = useState('');
@@ -45,6 +55,9 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({
     const [query, setQuery] = useState('');
     const editRef = useRef<HTMLInputElement | null>(null);
     const fileRef = useRef<HTMLInputElement | null>(null);
+
+    const [backupOpen, setBackupOpen] = useState(false);
+    const [trashOpen, setTrashOpen] = useState(false);
 
     const [naming, setNaming] = useState<Game | null>(null);
     const [newName, setNewName] = useState('');
@@ -91,31 +104,47 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({
                     <i className="fa-solid fa-layer-group mr-2" />
                     Partidas · {games.length}
                 </span>
-                <div className="flex items-center gap-3 text-xs">
-                    <button
-                        type="button"
-                        onClick={onOpenSync}
-                        className="focus-ring text-brand-subtle/80 hover:text-accent-soft transition-colors"
-                        title="Sincronizar las partidas entre aparatos"
-                    >
-                        <i className="fa-solid fa-arrows-rotate mr-1.5" />{syncLabel}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onExport}
-                        className="focus-ring text-brand-subtle/80 hover:text-accent-soft transition-colors"
-                        title="Descargar una copia de todas las partidas"
-                    >
-                        <i className="fa-solid fa-download mr-1.5" />Exportar
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => fileRef.current?.click()}
-                        className="focus-ring text-brand-subtle/80 hover:text-accent-soft transition-colors"
-                        title="Restaurar partidas desde una copia"
-                    >
-                        <i className="fa-solid fa-upload mr-1.5" />Importar
-                    </button>
+                <div className="flex items-center gap-3 text-xs flex-wrap">
+                    <SyncStatusChip
+                        saveStatus={saveStatus}
+                        syncEnabled={syncEnabled}
+                        syncStatus={syncStatus}
+                        syncLabel={syncLabel}
+                        onOpen={onOpenSync}
+                    />
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setBackupOpen(open => !open)}
+                            aria-haspopup="menu"
+                            aria-expanded={backupOpen}
+                            className="focus-ring text-brand-subtle/80 hover:text-accent-soft transition-colors"
+                            title="Copia de seguridad de las partidas (archivo JSON, sin cuenta)"
+                        >
+                            <i className="fa-solid fa-box-archive mr-1.5" />Copia de seguridad
+                        </button>
+                        {backupOpen && (
+                            <>
+                                <button type="button" aria-label="Cerrar menú" className="fixed inset-0 z-10 cursor-default" onClick={() => setBackupOpen(false)} />
+                                <div role="menu" className="absolute right-0 top-full mt-1 z-20 surface rounded-xl p-1 min-w-[11rem] shadow-[0_20px_50px_-20px_rgba(0,0,0,.95)]">
+                                    <button
+                                        type="button" role="menuitem"
+                                        onClick={() => { setBackupOpen(false); onExport(); }}
+                                        className="focus-ring w-full text-left px-3 py-2 rounded-lg text-brand-text hover:bg-white/[.06]"
+                                    >
+                                        <i className="fa-solid fa-download mr-2" />Exportar copia
+                                    </button>
+                                    <button
+                                        type="button" role="menuitem"
+                                        onClick={() => { setBackupOpen(false); fileRef.current?.click(); }}
+                                        className="focus-ring w-full text-left px-3 py-2 rounded-lg text-brand-text hover:bg-white/[.06]"
+                                    >
+                                        <i className="fa-solid fa-upload mr-2" />Restaurar copia
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
                     <input
                         ref={fileRef}
                         type="file"
@@ -297,6 +326,42 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({
                 </Overlay>
             )}
 
+            {deletedGames.length > 0 && (
+                <div className="mt-3">
+                    <button
+                        type="button"
+                        onClick={() => setTrashOpen(open => !open)}
+                        aria-expanded={trashOpen}
+                        className="focus-ring text-xs text-brand-subtle/80 hover:text-accent-soft transition-colors"
+                    >
+                        <i className={`fa-solid ${trashOpen ? 'fa-chevron-down' : 'fa-chevron-right'} mr-1.5`} />
+                        Eliminadas recientemente · {deletedGames.length}
+                    </button>
+                    {trashOpen && (
+                        <ul className="mt-2 space-y-1.5">
+                            {deletedGames.map(game => {
+                                const left = Math.max(0, Math.ceil(TOMBSTONE_DAYS - (Date.now() - (game.deletedAt ?? Date.now())) / 86_400_000));
+                                return (
+                                    <li key={game.id} className="flex items-center gap-3 rounded-xl tile px-3.5 py-2.5 text-sm">
+                                        <span className="min-w-0 flex-1 truncate text-brand-text">{game.name}</span>
+                                        <span className="text-xs text-brand-subtle shrink-0">
+                                            {left === 1 ? 'queda 1 día' : `quedan ${left} días`}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => onRestore(game.id)}
+                                            className="focus-ring shrink-0 rounded-lg px-2.5 py-1 bg-accent/20 text-accent-soft font-semibold hover:bg-accent/30 hover:text-white transition-colors"
+                                        >
+                                            Restaurar
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                </div>
+            )}
+
             {/* Confirmación de borrado: en su propio diálogo y no donde acabas
                 de tocar la papelera, para que un toque de más no borre nada. */}
             {confirming && (
@@ -316,6 +381,12 @@ const GameSwitcher: React.FC<GameSwitcherProps> = ({
                                     {' · '}
                                     {countTiles(confirming.board.letters)} fichas en el tablero
                                 </p>
+                                {syncEnabled && (
+                                    <p className="text-sm text-amber-200/90 mt-2">
+                                        La sincronización está activa: también se eliminará en tus demás aparatos.
+                                        Podrás restaurarla desde «Eliminadas recientemente» durante {TOMBSTONE_DAYS} días.
+                                    </p>
+                                )}
                             </div>
                         </div>
 

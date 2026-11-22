@@ -4,6 +4,8 @@
 // y el motor las ignora. Así es reversible, no se pierde si algún día se
 // actualiza el diccionario, y puedes revisar qué has vetado.
 
+import { logError } from './sync/diagnostics';
+
 const STORAGE_KEY = 'anagrama.blocked.v1';
 
 /** Sin tildes y en minúsculas, que es como juega el motor de tablero. */
@@ -19,7 +21,8 @@ export const loadBlocked = (): string[] => {
         const parsed = raw ? JSON.parse(raw) : [];
         if (!Array.isArray(parsed)) return [];
         return Array.from(new Set(parsed.filter((w): w is string => typeof w === 'string' && w.length > 0)));
-    } catch {
+    } catch (e) {
+        logError('wordBlocklist.load', e);
         return [];
     }
 };
@@ -27,7 +30,7 @@ export const loadBlocked = (): string[] => {
 export const saveBlocked = (words: string[]): void => {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(new Set(words)).sort()));
-    } catch { /* sin cuota: seguimos sin persistir */ }
+    } catch (e) { logError('wordBlocklist.save', e); /* sin cuota: seguimos sin persistir */ }
 };
 
 export const blockWord = (word: string): string[] => {

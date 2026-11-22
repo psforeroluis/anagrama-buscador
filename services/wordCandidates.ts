@@ -3,6 +3,7 @@
 
 import { BoardState } from '../types';
 import { normalizeWord } from './wordBlocklist';
+import { logError } from './sync/diagnostics';
 
 const STORAGE_KEY = 'anagrama.candidates.v1';
 
@@ -30,14 +31,15 @@ export const loadCandidates = (): string[] => {
             .filter((word): word is string => typeof word === 'string')
             .map(normalizeWord)
             .filter(word => word.length >= 2))).sort();
-    } catch {
+    } catch (e) {
+        logError('wordCandidates.load', e);
         return [];
     }
 };
 
 export const saveCandidates = (words: string[]): string[] => {
     const clean = Array.from(new Set(words.map(normalizeWord).filter(word => word.length >= 2))).sort();
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(clean)); } catch { /* sin cuota */ }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(clean)); } catch (e) { logError('wordCandidates.save', e); }
     return clean;
 };
 

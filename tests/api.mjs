@@ -63,8 +63,9 @@ try {
     assert.equal(res.status, 200); assert.equal(res.headers.get('ETag'), etag1);
     assert.equal((await call('GET', { headers: { 'If-None-Match': etag1 } })).status, 304, 'If-None-Match igual: 304');
 
-    res = await call('PUT', { headers: { 'If-Match': etag1 }, body: doc(game('a', 2)) });
-    assert.equal(res.status, 200, 'sobrescritura con el ETag leído');
+    assert.equal((await call('GET', { headers: { 'If-None-Match': `W/${etag1}` } })).status, 304, 'ETag débil (respuesta comprimida): 304');
+    res = await call('PUT', { headers: { 'If-Match': `W/${etag1}` }, body: doc(game('a', 2)) });
+    assert.equal(res.status, 200, 'sobrescritura con el ETag débil que devuelve la compresión');
     assert.ok(files.has('anagrama-sync.prev.json'), 'guarda la versión previa');
     assert.equal(JSON.parse(files.get('anagrama-sync.prev.json').text).games.a.rev, 1);
     assert.equal((await call('GET', { headers: { 'If-None-Match': etag1 } })).status, 200, 'con ETag viejo devuelve el documento');

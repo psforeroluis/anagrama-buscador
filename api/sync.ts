@@ -56,6 +56,12 @@ const parseDoc = (text: string): { schemaVersion: number; games: Record<string, 
     return d as { schemaVersion: number; games: Record<string, RemoteGame> };
 };
 
+/**
+ * Vercel convierte el ETag en uno débil (`W/"..."`) cuando comprime la respuesta, y el
+ * navegador lo devuelve así. El contenido es el mismo, así que se compara sin el prefijo.
+ */
+const strongEtag = (value: string | null): string | null => value?.trim().replace(/^W\//, '') ?? null;
+
 const readBlobText = async (path: string): Promise<{ text: string; etag: string } | null> => {
     const result = await get(path, { access: 'private', useCache: false, ...STORE });
     if (!result || result.statusCode !== 200 || !result.stream) return null;
@@ -71,7 +77,7 @@ export default {
             if (request.method === 'GET') {
                 const current = await readBlobText(PATH);
                 if (!current) return json(404, { error: 'empty' });
-                if (request.headers.get('if-none-match') === current.etag) {
+                if (strongEtag(request.headers.get('if-none-match')) === current.etag) {
                     return new Response(null, { status: 304, headers: { 'Cache-Control': 'no-store', ETag: current.etag } });
                 }
                 return new Response(current.text, {
@@ -95,7 +101,7 @@ export default {
                 if (g.deletedAt !== undefined && g.deletedAt < limit) delete parsed.games[id];
             }
             const body = JSON.stringify(parsed);
-            const ifMatch = request.headers.get('if-match');
+            const ifMatch = strongEtag(request.headers.get('if-match'));
 
             // Precondiciones explícitas (el `ifMatch` del almacén las repite de forma atómica):
             // crear solo si no existe; sobrescribir solo con el ETag leído.
